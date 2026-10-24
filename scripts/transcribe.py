@@ -86,7 +86,9 @@ def main():
     log(job, f"transcribe: STT={stt}" + (f" batch={env('WHISPER_BATCH', 8)}" if stt != "groq" else ""))
     segments, words = groq(media, wd) if stt == "groq" else local(media)
     if not segments:
-        sys.exit("transcribe: no speech detected")
+        if "--allow-empty" not in sys.argv:
+            sys.exit("transcribe: no speech detected")
+        log(job, "transcribe: no speech detected, continuing without a transcript (--allow-empty)")
     write_srt(segments, wd / "transcript.srt")
     (wd / "words.json").write_text(json.dumps(words, indent=1))
     log(job, f"transcribe: {len(segments)} segments, {len(words)} words")

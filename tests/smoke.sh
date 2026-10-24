@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end smoke test with real FFmpeg and no models: a generated 40 s video and a fake transcript
-# go through prepare -> pick (PICKER=none) -> clip render -> event render (final + draft).
+# go through prepare -> pick (PICKER=none) -> clip render -> event render (final + draft) -> montage.
 # Checks output durations, sizes and audio/video sync. Usage: tests/smoke.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -58,6 +58,11 @@ EOF
 python3 scripts/render_event.py "$job"
 python3 scripts/render_event.py "$job" --draft --skip-highlights
 
+echo "== montage (shot analysis, PICKER=none plan, render)"
+python3 scripts/shots.py "$job" --force
+PICKER=none python3 scripts/plan_shots.py "$job" --hook "Behind the scenes"
+python3 scripts/render_shots.py "$job"
+
 echo "== check outputs"
 python3 - "$job" <<'EOF'
 import sys
@@ -92,7 +97,10 @@ check("clip_01_smoke-clip.mp4", 22.3, (1080, 1920), tol=0.3)
 check("event_full.mp4", 39, (1920, 1080))
 check("event_full_draft.mp4", 39, (960, 540))
 check("event_highlights.mp4", 13, (1920, 1080))
-for f in ("captions.md", "event_full.srt", "youtube.md"):
+import json
+edit = json.loads((ROOT / "work" / sys.argv[1] / "edit.json").read_text())
+check("montage.mp4", sum(p["out"] - p["in"] for p in edit["edit"]), (1080, 1920), tol=0.1)
+for f in ("captions.md", "event_full.srt", "youtube.md", "montage.md"):
     if not (od / f).exists():
         fails.append(f"{f}: missing")
 if fails:

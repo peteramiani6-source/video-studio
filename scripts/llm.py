@@ -1,45 +1,65 @@
-"""One place that talks to a model. Every script calls ask(prompt).
+"""One place that talks to a model. Every script calls ask(prompt) or ask(prompt, images).
 
 PICKER=claude-code  uses your Claude subscription through the logged-in `claude` CLI (no API key)
 PICKER=claude       Anthropic API, billed per token (needs ANTHROPIC_API_KEY)
 PICKER=gemini       Google Gemini API (needs GEMINI_API_KEY)
 """
+import base64
 import json
 import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 from common import env
 
 
-def ask(prompt):
+def ask(prompt, images=()):
+    """Send a prompt (plus optional JPEG/PNG image paths) to the configured model, return its text."""
+    images = [Path(i).resolve() for i in images]
     picker = env("PICKER", "claude-code")
     if picker == "claude-code":
         if not shutil.which("claude"):
             raise RuntimeError("`claude` CLI not found. Install Claude Code and run `claude` once to log in")
         child_env = dict(os.environ)
         child_env.pop("ANTHROPIC_API_KEY", None)  # make the CLI use the subscription login, not API billing
-        r = subprocess.run(
-            ["claude", "-p", "Follow the instructions in the input exactly. Do not use any tools. "
-                             "Reply with the requested JSON only.", "--output-format", "text"],
-            input=prompt, capture_output=True, text=True, timeout=1800, env=child_env)
+        if images:
+            # The CLI sees pictures through its Read tool: allow only that tool, and list the files.
+            prompt = ("First use the Read tool to look at each of these images:\n"
+                      + "\n".join(f"- {i}" for i in images) + "\n\n" + prompt)
+            cmd = ["claude", "-p", "Follow the instructions in the input exactly. Use only the Read tool, only "
+                                   "on the listed images. Reply with the requested JSON only.",
+                   "--output-format", "text", "--allowedTools", "Read"]
+        else:
+            cmd = ["claude", "-p", "Follow the instructions in the input exactly. Do not use any tools. "
+                                   "Reply with the requested JSON only.", "--output-format", "text"]
+        r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=1800, env=child_env)
         if r.returncode != 0:
             raise RuntimeError(f"claude -p failed: {(r.stderr or r.stdout)[-400:]}")
         return r.stdout
     if picker == "claude":
         import anthropic
+        content = [{"type": "image", "source": {"type": "base64", "media_type": _mime(i),
+                                                "data": base64.b64encode(i.read_bytes()).decode()}}
+                   for i in images] + [{"type": "text", "text": prompt}]
         r = anthropic.Anthropic().messages.create(
             model=env("CLAUDE_MODEL", "claude-sonnet-5-5"), max_tokens=8000,
-            messages=[{"role": "user", "content": prompt}])
+            messages=[{"role": "user", "content": content}])
         return "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
     if picker == "gemini":
         from google import genai
+        from google.genai import types
+        contents = [types.Part.from_bytes(data=i.read_bytes(), mime_type=_mime(i)) for i in images] + [prompt]
         r = genai.Client().models.generate_content(
-            model=env("GEMINI_MODEL", "gemini-2.5-flash"), contents=prompt,
+            model=env("GEMINI_MODEL", "gemini-2.5-flash"), contents=contents,
             config={"response_mime_type": "application/json"})
         return r.text
     raise ValueError(f"unknown PICKER={picker}")
+
+
+def _mime(path):
+    return "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
 
 
 FENCE = re.compile(r"```(?:json|JSON)?\s*(.*?)```", re.S)
@@ -73,14 +93,14 @@ def extract_json(text, kind="array"):
     raise ValueError(f"no valid JSON {kind} in model reply")
 
 
-def ask_json(prompt, kind, validate, raw_path=None, attempts=2):
+def ask_json(prompt, kind, validate, raw_path=None, attempts=2, images=()):
     """ask() + validate() on each JSON value in the reply, retrying once with the error fed back.
 
     validate(obj) must return the cleaned value or raise ValueError/KeyError/TypeError.
     Every raw reply is appended to raw_path (if given) for debugging."""
     last, p = None, prompt
     for n in range(1, attempts + 1):
-        raw = ask(p)
+        raw = ask(p, images)
         if raw_path:
             with open(raw_path, "a") as fh:
                 fh.write(f"===== attempt {n} =====\n{raw}\n")

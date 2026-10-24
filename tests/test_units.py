@@ -17,6 +17,9 @@ from pick_clips import snap, validate_clips  # noqa: E402
 from plan_event import clean_ranges, validate_plan  # noqa: E402
 import look  # noqa: E402
 from render import hook_filters, keep_ranges, remap  # noqa: E402
+from plan_shots import heuristic_edit, quality_warnings, validate_edit  # noqa: E402
+from render_shots import frame_filter  # noqa: E402
+from shots import cut_times, mean_in, parse_metadata, split_shots  # noqa: E402
 
 
 class ExtractJson(unittest.TestCase):
@@ -47,7 +50,7 @@ class AskJsonRetry(unittest.TestCase):
     def test_retries_once_with_error_then_succeeds(self):
         replies = iter(["no json here", '[{"start": 1, "end": 40}]'])
         prompts = []
-        with mock.patch.object(llm, "ask", side_effect=lambda p: prompts.append(p) or next(replies)):
+        with mock.patch.object(llm, "ask", side_effect=lambda p, i=(): prompts.append(p) or next(replies)):
             out = llm.ask_json("PROMPT", "array", lambda x: x)
         self.assertEqual(out, [{"start": 1, "end": 40}])
         self.assertEqual(len(prompts), 2)
@@ -218,6 +221,71 @@ class Hook(unittest.TestCase):
         self.assertEqual(self.render({**self.CFG, "enabled": False}), [])
 
 
+class Shots(unittest.TestCase):
+    META = ("frame:0    pts:0       pts_time:0\nlavfi.blur=4.5\n"
+            "frame:1    pts:1       pts_time:0.2\nlavfi.blur=5.5\n"
+            "frame:2    pts:2       pts_time:10.4\nlavfi.blur=20\n")
+
+    def test_parse_metadata_and_cuts(self):
+        self.assertEqual(parse_metadata(self.META, "lavfi.blur"), [(0.0, 4.5), (0.2, 5.5), (10.4, 20.0)])
+        self.assertEqual(cut_times(self.META), [0.0, 0.2, 10.4])
+        self.assertEqual(mean_in(parse_metadata(self.META, "lavfi.blur"), 0, 1), 5.0)
+        self.assertIsNone(mean_in([], 0, 1))
+
+    def test_split_shots_chunks_long_takes_and_merges_slivers(self):
+        shots = split_shots([10.0, 10.3, 30.0], total=34.0, max_shot=8)
+        # the 0.3 s sliver at 10.0-10.3 joins take 1; take 2 (19.7 s) becomes three chunks under 8 s
+        self.assertEqual([(s["take"], s["start"], s["end"]) for s in shots],
+                         [(1, 0.0, 5.15), (1, 5.15, 10.3), (2, 10.3, 16.867), (2, 16.867, 23.433),
+                          (2, 23.433, 30.0), (3, 30.0, 34.0)])
+
+    def test_no_cuts_still_chunks(self):
+        shots = split_shots([], total=20.0, max_shot=8)
+        self.assertEqual(len(shots), 3)
+        self.assertAlmostEqual(shots[1]["start"], 20 / 3, places=2)
+
+
+class Montage(unittest.TestCase):
+    SHOTS = [{"id": 1, "take": 1, "start": 0.0, "end": 5.0, "blur": 4.0, "motion": 3.0},
+             {"id": 2, "take": 2, "start": 5.0, "end": 15.0, "blur": 25.0, "motion": 2.0},
+             {"id": 3, "take": 3, "start": 15.0, "end": 23.0, "blur": 5.0, "motion": 30.0},
+             {"id": 4, "take": 4, "start": 23.0, "end": 30.0, "blur": 4.5, "motion": 4.0}]
+    CFG = {"min_shot": 1.5, "max_shot": 8, "seconds": 12, "gear_max": 3}
+
+    def test_validate_edit_keeps_order_and_fixes_bad_values(self):
+        e = validate_edit({"hook": "Hi", "edit": [
+            {"shot": 4, "in": 24, "out": 29, "role": "wide", "focus_x": 0.2},
+            {"shot": 1, "in": "0:01", "out": 99, "role": "GEAR", "focus_x": 7},   # out capped to shot end
+            {"shot": 42, "in": 1, "out": 2},                                      # no such shot
+            {"shot": 4, "in": 25, "out": 27},                                     # overlaps piece 1
+            {"shot": 2, "in": 6, "out": 6.5}]}, self.SHOTS, self.CFG)              # too short
+        self.assertEqual([(p["shot"], p["in"], p["out"]) for p in e["edit"]], [(4, 24.0, 29.0), (1, 1.0, 5.0)])
+        self.assertEqual(e["edit"][1]["role"], "gear")
+        self.assertEqual(e["edit"][1]["focus_x"], 1.0)
+
+    def test_validate_edit_caps_length_and_needs_two(self):
+        e = validate_edit({"edit": [{"shot": 2, "in": 5, "out": 15}, {"shot": 4, "in": 23, "out": 30}]},
+                          self.SHOTS, self.CFG)
+        self.assertEqual(e["edit"][0]["out"] - e["edit"][0]["in"], 8)
+        with self.assertRaises(ValueError):
+            validate_edit({"edit": [{"shot": 1, "in": 0, "out": 4}]}, self.SHOTS, self.CFG)
+
+    def test_quality_warnings(self):
+        w = quality_warnings({"edit": [{"shot": 2}, {"shot": 3}, {"shot": 4}]}, self.SHOTS)
+        self.assertEqual(len(w), 2)
+        self.assertIn("blurry", w[0])
+        self.assertIn("shaky", w[1])
+
+    def test_heuristic_prefers_sharp_steady_in_time_order(self):
+        e = heuristic_edit(self.SHOTS, self.CFG)
+        self.assertEqual([p["shot"] for p in e["edit"]], [1, 4])
+
+    def test_frame_filter(self):
+        self.assertIn("x='(iw-ow)*0.25'", frame_filter("vertical", 1080, 1920, 0.25))
+        self.assertIn("x='(iw-ow)*1'", frame_filter("vertical", 1080, 1920, 3))
+        self.assertTrue(frame_filter("wide", 1920, 1080, 0.5).startswith("scale=1920:1080"))
+
+
 class LlmSubscriptionEnv(unittest.TestCase):
     def test_claude_code_picker_never_passes_the_api_key(self):
         seen = {}
@@ -231,6 +299,21 @@ class LlmSubscriptionEnv(unittest.TestCase):
                 mock.patch.object(llm.subprocess, "run", side_effect=fake_run):
             llm.ask("hi")
         self.assertNotIn("ANTHROPIC_API_KEY", seen)
+
+    def test_images_go_through_the_read_tool_only(self):
+        calls = {}
+
+        def fake_run(cmd, **kw):
+            calls["cmd"], calls["input"] = cmd, kw["input"]
+            return mock.Mock(returncode=0, stdout="{}", stderr="")
+
+        with mock.patch.dict(os.environ, {"PICKER": "claude-code"}), \
+                mock.patch.object(llm.shutil, "which", return_value="/usr/bin/claude"), \
+                mock.patch.object(llm.subprocess, "run", side_effect=fake_run):
+            llm.ask("pick shots", images=["work/j/frames/sheet_01.jpg"])
+        self.assertEqual(calls["cmd"][-2:], ["--allowedTools", "Read"])
+        self.assertIn("sheet_01.jpg", calls["input"])
+        self.assertTrue(calls["input"].rstrip().endswith("pick shots"))
 
 
 if __name__ == "__main__":

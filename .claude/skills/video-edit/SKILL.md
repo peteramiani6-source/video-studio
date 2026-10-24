@@ -1,6 +1,6 @@
 ---
 name: video-edit
-description: Edit videos in this repo. Use it for full edited event videos (title card, trimmed talks, lower-thirds, highlights, YouTube chapters) and for captioned 9:16 clips for Reels, Shorts and TikTok. Use it whenever you're asked to edit, cut, clip, caption or reframe a recording, or when a new file lands in inbox/.
+description: Edit videos in this repo. Use it for full edited event videos (title card, trimmed talks, lower-thirds, highlights, YouTube chapters), shot-based montages where the picture matters (behind the scenes, promos, recaps), and captioned 9:16 clips for Reels, Shorts and TikTok. Use it whenever you're asked to edit, cut, clip, caption or reframe a recording, or when a new file lands in inbox/.
 ---
 
 # video-edit
@@ -53,6 +53,33 @@ To change one clip, edit `work/<job>/clips.json`, then run `python3 scripts/rend
 Each clip's `hook` is burned into its first seconds (styling under `hook` in `config/brand.json`).
 
 To resume a failed job after fixing the cause, run `scripts/run.sh inbox/<file> <job>`. It skips the steps that already have output and archives the source when it succeeds.
+
+## C. Montage mode: short edits where the picture matters
+
+```bash
+scripts/montage.sh <video-or-folder> "what it is, e.g. behind the scenes of our garden interview"
+scripts/montage.sh --resume <job-id>
+```
+
+Use this for behind-the-scenes clips, promos and recaps: anything judged on what you **see**, not only on what is said. A folder of camera angles or takes is fine, since every take becomes its own shots.
+
+| # | Command | Output |
+|---|---------|--------|
+| 1 | `merge.py` | `work/<job>/tight.mp4` |
+| 2 | `transcribe.py <job> --allow-empty` | captions, if there is speech |
+| 3 | `shots.py <job>` | `shots.json` (scene cuts, `blur` (higher = blurrier), `motion` (higher = shakier or busier), speech) and `frames/sheet_NN.jpg` contact sheets |
+| 4 | `plan_shots.py <job> --brief ".."` | `edit.json`: the model looks at the sheets and orders the shots |
+| 5 | `render_shots.py <job> [--draft]` | `out/<job>/montage.mp4` and `montage.md` |
+
+**edit.json is the cut, in playback order.** Each entry has `shot`, `in`/`out` (seconds in `tight.mp4`, inside that shot), `role`, `focus_x` and `why`. `focus_x` sets where the vertical crop sits across the frame: 0 is the left edge, 0.5 the centre, 1 the right edge.
+
+To change the cut, look at the contact sheets with the Read tool, edit `edit.json`, then re-run step 5:
+- **"Start with the wide shot":** move that entry to the top.
+- **"Less of the tripod":** shorten or drop pieces with `role: gear`.
+- **"The guest is cut off":** move `focus_x` toward the side the guest is on.
+- **"Shorter":** drop pieces, or trim their `in`/`out`.
+
+`plan_shots` warns when a chosen piece measured much blurrier or shakier than the rest. Check those first. Length, shot limits, gear time and format live under `montage` in `config/brand.json`; colour and stabilization under `look`.
 
 ## Resuming and checking
 

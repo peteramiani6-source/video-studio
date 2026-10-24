@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import sys
 
-from common import ROOT, brand, duration, fontfile, job_dir, log, out_dir, parse_srt, write_srt
+from common import ROOT, brand, duration, fontfile, job_dir, log, out_dir, parse_srt, probe, write_srt
 import look
 
 JOIN_GAP = 0.25  # segments closer than this in the source are one continuous take: no fade between them
@@ -133,13 +133,25 @@ class Renderer:
         return out
 
     def concat(self, parts, final):
-        lst = self.tmp / f"{final.stem}.txt"
-        lst.write_text("".join(f"file '{p.name}'\n" for p in parts))
-        joined = self.tmp / f"{final.stem}_joined.mp4"
-        ff(["-f", "concat", "-safe", "0", "-i", lst.name, "-c", "copy", joined.name], cwd=self.tmp)
-        ff(["-i", joined.name, "-c:v", "copy",
+        """Join parts: video streams copied, audio re-cut to each part's exact video length as PCM,
+        then muxed and loudness-normalised once. Joining the AAC tracks directly adds a few ms of
+        padding per cut, which pulls the sound out of sync on long events with many sections."""
+        vlst, alst = self.tmp / f"{final.stem}_v.txt", self.tmp / f"{final.stem}_a.txt"
+        vlines, alines = [], []
+        for p in parts:
+            d = float(next(st for st in probe(p)["streams"] if st["codec_type"] == "video")["duration"])
+            wav = p.with_suffix(".wav")
+            ff(["-i", p.name, "-vn", "-af", f"aresample=48000,apad,atrim=0:{d:.6f}", "-c:a", "pcm_s16le",
+                wav.name], cwd=self.tmp)
+            vlines.append(f"file '{p.name}'\n")
+            alines.append(f"file '{wav.name}'\n")
+        vlst.write_text("".join(vlines))
+        alst.write_text("".join(alines))
+        ff(["-f", "concat", "-safe", "0", "-i", vlst.name, "-f", "concat", "-safe", "0", "-i", alst.name,
+            "-map", "0:v", "-map", "1:a", "-c:v", "copy",
             "-af", f"loudnorm=I={self.ev['loudness_lufs']}:TP=-1.5:LRA=11",
-            "-c:a", "aac", "-ar", "48000", "-b:a", self.enc[-1], "-movflags", "+faststart", str(final)], cwd=self.tmp)
+            "-c:a", "aac", "-ar", "48000", "-b:a", self.enc[-1], "-shortest", "-movflags", "+faststart",
+            str(final)], cwd=self.tmp)
 
     def full(self):
         p, e = self.plan, self.ev
