@@ -27,7 +27,8 @@ def main():
     src, job = Path(sys.argv[1]), sys.argv[2]
     wd = ROOT / "work" / job
     wd.mkdir(parents=True, exist_ok=True)
-    out = wd / "tight.mp4"
+    final = wd / "tight.mp4"
+    out = wd / "tight.part.mp4"  # renamed only when complete, so a crash never leaves a half file
 
     if src.is_dir():
         files = sorted(p for p in src.iterdir() if p.suffix.lower() in VIDEO_EXT)
@@ -48,6 +49,7 @@ def main():
         else:
             run(["-i", str(f), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
                  "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-shortest", str(out)])
+        out.replace(final)
         log(job, f"merge: single file {f.name}")
         return
 
@@ -72,8 +74,10 @@ def main():
         log(job, f"merge: normalised {f.name} ({d:.0f}s)")
 
     lst = wd / "concat.txt"
-    lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts))
+    esc = lambda p: p.as_posix().replace("'", "'\\''")  # concat demuxer quoting, for paths with apostrophes
+    lst.write_text("".join(f"file '{esc(p)}'\n" for p in parts))
     run(["-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", "-movflags", "+faststart", str(out)])
+    out.replace(final)
     (wd / "sources.json").write_text(json.dumps(sources, indent=2))
     shutil.rmtree(norm)
     log(job, f"merge: joined {len(files)} files ({offset / 60:.1f} min)")

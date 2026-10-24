@@ -25,12 +25,16 @@ python3 -m venv .venv
 .venv/bin/pip install -q -r requirements.txt
 ok "python deps installed in .venv"
 
+echo "Checking the configured models (config/models.env):"
+.venv/bin/python scripts/doctor.py || echo "  fix the FAIL lines above, then run: .venv/bin/python scripts/doctor.py"
+
 cat <<'EOF'
 
 Next:
   1. Run `claude` once and log in with your Claude subscription (no API key needed)
   2. Edit an event:      scripts/event.sh "inbox/<folder-or-file>" "Title" "Date | Venue"
      Clips from a talk:  scripts/run.sh inbox/<your-video>.mp4
+     Resume a failed event: scripts/event.sh --resume <job-id>
   3. Run in background:  scripts/watch.sh            (or MODE=direct scripts/watch.sh)
   4. Always-on (Linux):  see deploy/video-studio.service
 
