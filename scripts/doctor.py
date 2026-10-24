@@ -42,6 +42,10 @@ def main():
         need(" subtitles " in filters, "ffmpeg libass (captions)", "this ffmpeg build lacks libass; install the distro ffmpeg")
         need(" drawtext " in filters, "ffmpeg drawtext (hooks, titles, lower-thirds)",
              "this ffmpeg build lacks libfreetype; install the distro ffmpeg")
+        stab = str(json.loads((ROOT / "config/brand.json").read_text()).get("look", {}).get("stabilize", "off"))
+        if stab == "vidstab":
+            want(" vidstabdetect " in filters, "look.stabilize=vidstab",
+                 "this ffmpeg has no libvidstab, falling back to deshake")
     want(shutil.which("fc-match"), "fontconfig", "`sudo apt install fontconfig fonts-dejavu-core` for reliable fonts")
 
     # Config files parse

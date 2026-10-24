@@ -17,6 +17,7 @@ import subprocess
 import sys
 
 from common import ROOT, brand, duration, fontfile, job_dir, log, out_dir, parse_srt, write_srt
+import look
 
 JOIN_GAP = 0.25  # segments closer than this in the source are one continuous take: no fade between them
 
@@ -104,9 +105,12 @@ class Renderer:
         self.n += 1
         out = self.tmp / f"seg_{self.n:03d}.mp4"
         s, d = float(seg["start"]), float(seg["end"]) - float(seg["start"])
-        vf = [f"scale={self.W}:{self.H}:force_original_aspect_ratio=decrease",
-              f"pad={self.W}:{self.H}:(ow-iw)/2:(oh-ih)/2", "setsar=1", f"fps={self.fps}"]
-        af = []
+        lk = look.settings()
+        stab = look.stabilize_filters(lk, self.src, s, d, self.fps, self.tmp, out.stem)
+        vf = [f"fps={self.fps}", *stab, *look.color_filters(lk),
+              f"scale={self.W}:{self.H}:force_original_aspect_ratio=decrease",
+              f"pad={self.W}:{self.H}:(ow-iw)/2:(oh-ih)/2", "setsar=1"]
+        af = look.audio_filters(lk)
         if fade_in and fade:
             vf.append(f"fade=in:st=0:d={fade}")
             af.append(f"afade=in:st=0:d={fade}")

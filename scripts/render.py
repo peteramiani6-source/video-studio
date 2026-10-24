@@ -10,6 +10,7 @@ import sys
 import textwrap
 
 from common import brand, env, fontfile, has_audio, job_dir, log, out_dir, parse_srt, write_srt
+import look
 
 
 def ass_color(hex_rgb):
@@ -39,22 +40,36 @@ def word_cues(words, start, end, max_chars):
 
 def hook_filters(hook, name, wd, cfg, H, font):
     """drawtext filters showing the hook in the opening seconds, one centred line per filter.
+    anchor "bottom" puts the last line's bottom at y (fraction of the height), just above the captions;
+    "top" puts the first line's top there. Shadow + outline keep it readable on busy backgrounds
+    (leaves, crowds) without a box; set "box": true for the old boxed look.
     Text goes through files (relative to cwd=wd) so quotes and colons need no escaping."""
     if not hook or not cfg.get("enabled", True):
         return []
-    secs, size = float(cfg.get("seconds", 3)), int(cfg.get("font_size", 68))
+    secs, size = float(cfg.get("seconds", 1.5)), int(cfg.get("font_size", 84))
     ff = fontfile(font, bold=True)
     fnt = f"fontfile='{ff}'" if ff else f"font='{font}'"
-    box = f"box=1:boxcolor=0x{cfg.get('box_color', '#000000').lstrip('#')}@{cfg.get('box_opacity', 0.6)}:boxborderw=16"
-    alpha = f"alpha='if(lt(t,{secs - 0.3}),1,max(0,({secs}-t)/0.3))'"
+    hexc = lambda key, default: "0x" + str(cfg.get(key, default)).lstrip("#")
+    style = []
+    if cfg.get("box", False):
+        style.append(f"box=1:boxcolor={hexc('box_color', '#000000')}@{cfg.get('box_opacity', 0.6)}:boxborderw=16")
+    if int(cfg.get("outline", 3)):
+        style.append(f"borderw={int(cfg.get('outline', 3))}:bordercolor={hexc('outline_color', '#000000')}")
+    if int(cfg.get("shadow", 5)):
+        sh = int(cfg.get("shadow", 5))
+        style.append(f"shadowx={sh}:shadowy={sh}:shadowcolor={hexc('shadow_color', '#000000')}@0.7")
+    fade = min(0.3, secs / 4)
+    alpha = f"alpha='if(lt(t,{secs - fade:.3f}),1,max(0,({secs}-t)/{fade:.3f}))'"
+    lines = textwrap.wrap(hook, int(cfg.get("max_chars_per_line", 16)))
+    step, base = size * 1.35, H * float(cfg.get("y", 0.61))
+    top = base - len(lines) * step if cfg.get("anchor", "bottom") == "bottom" else base
     out = []
-    for k, line in enumerate(textwrap.wrap(hook, int(cfg.get("max_chars_per_line", 18)))):
+    for k, line in enumerate(lines):
         tf = f"{name}_hook_{k}.txt"
         (wd / tf).write_text(line)
-        y = int(H * float(cfg.get("y", 0.16)) + k * size * 1.35)
         out.append(f"drawtext={fnt}:textfile={tf}:expansion=none:fontsize={size}:"
-                   f"fontcolor=0x{cfg.get('color', '#FFFFFF').lstrip('#')}:{box}:"
-                   f"x=(w-text_w)/2:y={y}:{alpha}:enable='lt(t,{secs})'")
+                   f"fontcolor={hexc('color', '#FFFFFF')}:" + "".join(x + ":" for x in style) +
+                   f"x=(w-text_w)/2:y={int(top + k * step)}:{alpha}:enable='lt(t,{secs})'")
     return out
 
 
@@ -111,6 +126,7 @@ def main():
           f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
           f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,setsar=1")
     audio = has_audio(src)
+    lk = look.settings()
     cut = env("SILENCE_CUT", "1") == "1" and bool(words) and audio
     min_gap = float(env("SILENCE_MIN_GAP", 0.8))
     margin = float(str(env("SILENCE_MARGIN", 0.2)).rstrip("sec"))  # tolerates the old "0.2sec" form
@@ -133,9 +149,11 @@ def main():
         write_srt(cues, wd / srt)
         hook = hook_filters(c.get("hook", ""), name, wd, b.get("hook", {}), H, cap["font"])
 
-        # Each kept range is trimmed from one split of the input, then everything is joined
+        # Polish (stabilize, colour) on the clip window, then each kept range is trimmed from one split
+        stab = look.stabilize_filters(lk, src, start, end - start, fps, wd, name)
+        pre = ",".join([f"fps={fps}", *stab, *look.color_filters(lk)])
         k = len(ranges)
-        graph = [f"[0:v]fps={fps},split={k}" + "".join(f"[s{j}]" for j in range(k))]
+        graph = [f"[0:v]{pre},split={k}" + "".join(f"[s{j}]" for j in range(k))]
         graph += [f"[s{j}]trim=start={a:.3f}:end={b_:.3f},setpts=PTS-STARTPTS[v{j}]"
                   for j, (a, b_) in enumerate(ranges)]
         if audio:
@@ -143,7 +161,8 @@ def main():
             graph += [f"[r{j}]atrim=start={a:.3f}:end={b_:.3f},asetpts=PTS-STARTPTS[a{j}]"
                       for j, (a, b_) in enumerate(ranges)]
             graph.append("".join(f"[v{j}][a{j}]" for j in range(k)) + f"concat=n={k}:v=1:a=1[vc][ac]")
-            graph.append("[ac]" + ("loudnorm=I=-14:TP=-1.5:LRA=11" if vid.get("loudnorm") else "anull") + "[a]")
+            afx = [*look.audio_filters(lk), *(["loudnorm=I=-14:TP=-1.5:LRA=11"] if vid.get("loudnorm") else [])]
+            graph.append("[ac]" + (",".join(afx) or "anull") + "[a]")
         else:
             graph.append("".join(f"[v{j}]" for j in range(k)) + f"concat=n={k}:v=1:a=0[vc]")
         subs = [f"subtitles={srt}:force_style='{style}'"] if cues else []  # libass can't open an empty SRT
