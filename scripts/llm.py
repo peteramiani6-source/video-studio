@@ -42,9 +42,54 @@ def ask(prompt):
     raise ValueError(f"unknown PICKER={picker}")
 
 
+FENCE = re.compile(r"```(?:json|JSON)?\s*(.*?)```", re.S)
+
+
+def iter_json(text, kind="array"):
+    """Yield every complete JSON array/object in a model reply, in order.
+
+    Looks inside ```json fences first, then the whole text, and decodes one value at a time
+    (json.JSONDecoder.raw_decode), so prose, notes or stray brackets around the JSON don't break it."""
+    want, opener = (list, "[") if kind == "array" else (dict, "{")
+    dec = json.JSONDecoder()
+    for chunk in [m.group(1) for m in FENCE.finditer(text or "")] + [text or ""]:
+        i = chunk.find(opener)
+        while i != -1:
+            try:
+                obj, end = dec.raw_decode(chunk, i)
+                if isinstance(obj, want):
+                    yield obj
+                    i = chunk.find(opener, end)
+                    continue
+            except json.JSONDecodeError:
+                pass
+            i = chunk.find(opener, i + 1)
+
+
 def extract_json(text, kind="array"):
-    pattern = r"\[.*\]" if kind == "array" else r"\{.*\}"
-    m = re.search(pattern, text, re.S)
-    if not m:
-        raise ValueError(f"no JSON {kind} in model reply")
-    return json.loads(m.group(0))
+    """The first complete JSON array/object in a model reply. Raises ValueError if there is none."""
+    for obj in iter_json(text, kind):
+        return obj
+    raise ValueError(f"no valid JSON {kind} in model reply")
+
+
+def ask_json(prompt, kind, validate, raw_path=None, attempts=2):
+    """ask() + validate() on each JSON value in the reply, retrying once with the error fed back.
+
+    validate(obj) must return the cleaned value or raise ValueError/KeyError/TypeError.
+    Every raw reply is appended to raw_path (if given) for debugging."""
+    last, p = None, prompt
+    for n in range(1, attempts + 1):
+        raw = ask(p)
+        if raw_path:
+            with open(raw_path, "a") as fh:
+                fh.write(f"===== attempt {n} =====\n{raw}\n")
+        last = ValueError(f"no valid JSON {kind} in model reply")
+        for obj in iter_json(raw, kind):  # first candidate that validates wins
+            try:
+                return validate(obj)
+            except (ValueError, KeyError, TypeError) as e:
+                last = e
+        p = (prompt + f"\n\nYour previous reply could not be used: {last}. "
+                      f"Reply again with the JSON {kind} only, exactly in the format above.")
+    raise ValueError(f"model reply unusable after {attempts} attempts: {last}")

@@ -96,6 +96,11 @@ inbox/ work/ out/ archive/ logs/
 
 ## Notes
 
+- `python3 scripts/doctor.py` checks that ffmpeg, Whisper and your chosen model (login or key) are ready. `run.sh` and `event.sh` run it automatically first.
+- Resume a failed event with `scripts/event.sh --resume <job-id>`. Finished steps (the merge and the long transcription) are skipped.
+- Only one job renders at a time. A second one waits instead of slowing both down.
+- Run `python3 -m unittest discover -s tests` for the fast unit tests, and `tests/smoke.sh` for the full render test.
+
 - Each step is safe to re-run. To tweak one clip, edit `work/<job>/clips.json` and run
   `python3 scripts/render.py <job> --only 3`.
 - `tests/smoke.sh` renders a generated test video through both modes with real FFmpeg and no models.

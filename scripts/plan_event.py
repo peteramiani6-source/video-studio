@@ -2,16 +2,21 @@
 
 Usage: python3 scripts/plan_event.py <job-id> [--title "..."] [--subtitle "..."]
 
+The model's reply is validated (times parsed, broken entries dropped, at least one segment required)
+and retried once with the error. If it is still unusable the step fails, rather than silently keeping
+the whole event: fix the cause, or set PICKER=none to keep everything between the first and last words.
+
 The model reads the timestamped transcript and decides what stays, what each section is called,
 who is speaking (for lower-thirds), the highlight moments and the social clips.
 plan.json is plain JSON: review or edit it (or ask Claude Code to), then re-run render_event.py.
 """
+import argparse
 import json
 import sys
 
-from common import duration, env, job_dir, log, parse_srt
-from llm import ask, extract_json
-from pick_clips import snap
+from common import clean_range, duration, env, job_dir, log, parse_srt, parse_time
+from llm import ask_json
+from pick_clips import snap, validate_clips
 
 PROMPT = """You are editing a recorded event into a finished video.
 
@@ -46,14 +51,29 @@ Transcript:
 {transcript}"""
 
 
-def to_sec(v):
-    """Accepts 95, "95", "1:35" or "01:01:35"."""
-    if isinstance(v, (int, float)):
-        return float(v)
-    sec = 0.0
-    for part in str(v).replace(",", ".").split(":"):
-        sec = sec * 60 + float(part)
-    return sec
+to_sec = parse_time  # kept for anything importing the old name
+
+
+def validate_plan(obj, total):
+    """Clean a model-written (or hand-edited) plan. Raises ValueError if there is no usable segment."""
+    if not isinstance(obj, dict):
+        raise ValueError("expected a JSON object")
+    segs = []
+    for it in obj.get("segments") or []:
+        c = clean_range(it, total)
+        if c is None:
+            continue
+        for k in ("speaker", "role"):
+            c[k] = str(c.get(k) or "").strip()
+        c["label"] = str(c.get("label") or "").strip() or "Section"
+        segs.append(c)
+    if not segs:
+        raise ValueError('"segments" has no entry with a usable start and end')
+    hl = [c for c in (clean_range(h, total) for h in obj.get("highlights") or []) if c]
+    yt = obj.get("youtube") if isinstance(obj.get("youtube"), dict) else {}
+    return {"segments": segs, "highlights": [{"start": h["start"], "end": h["end"]} for h in hl],
+            "social_clips": validate_clips(obj.get("social_clips") or [], total, allow_empty=True),
+            "youtube": {"title": str(yt.get("title") or ""), "description": str(yt.get("description") or "")}}
 
 
 def transcript_with_gaps(segs, total):
@@ -85,15 +105,18 @@ def clean_ranges(items, total, min_len, pad=0.4):
 
 
 def main():
-    args = sys.argv[1:]
-    job = args[0]
-    opt = lambda k: args[args.index(k) + 1] if k in args and args.index(k) + 1 < len(args) else ""
+    ap = argparse.ArgumentParser(description="Write the event edit (plan.json) from the transcript")
+    ap.add_argument("job")
+    ap.add_argument("--title", default="")
+    ap.add_argument("--subtitle", default="")
+    args = ap.parse_args()
+    job = args.job
     wd = job_dir(job)
     total = duration(wd / "tight.mp4")
     segs = parse_srt((wd / "transcript.srt").read_text())
     ev = json.loads((wd / "event.json").read_text()) if (wd / "event.json").exists() else {}
-    title = opt("--title") or ev.get("title", "")
-    subtitle = opt("--subtitle") or ev.get("subtitle", "")
+    title = args.title or ev.get("title", "")
+    subtitle = args.subtitle or ev.get("subtitle", "")
     lo, hi = float(env("CLIP_MIN", 25)), float(env("CLIP_MAX", 60))
     n_clips = int(env("EVENT_CLIP_COUNT", 5))
     target = (f"Target length of the full edit: about {ev['target_minutes']} minutes; keep the most important parts."
@@ -106,13 +129,15 @@ def main():
                                notes=ev.get("notes", "(none)"), total=total, target=target,
                                clips=n_clips, lo=int(lo), hi=int(hi),
                                transcript=transcript_with_gaps(segs, total))
+        raw_path = wd / "plan_raw.txt"
+        raw_path.unlink(missing_ok=True)
         try:
-            raw = ask(prompt)
-            (wd / "plan_raw.txt").write_text(raw)
-            plan = extract_json(raw, "object")
-            log(job, f"plan: model returned {len(plan.get('segments', []))} segments")
+            plan = ask_json(prompt, "object", lambda o: validate_plan(o, total), raw_path)
         except Exception as e:
-            log(job, f"plan: WARNING model failed ({type(e).__name__}: {e}); keeping the whole event")
+            log(job, f"plan: FAILED ({type(e).__name__}: {e}). Raw replies: {raw_path}")
+            sys.exit("plan: no usable edit from the model. Fix the cause (login, PICKER in config/models.env) "
+                     "and resume, or set PICKER=none to keep the whole event.")
+        log(job, f"plan: model returned {len(plan['segments'])} segments")
     if plan is None:  # fallback: trim the dead time before the first and after the last words
         first = max(0.0, segs[0]["start"] - 2) if segs else 0.0
         last = min(total, segs[-1]["end"] + 2) if segs else total
@@ -120,9 +145,13 @@ def main():
                 "highlights": [], "social_clips": [], "youtube": {"title": title, "description": ""}}
 
     # organiser's must_keep ranges always survive
-    for a, b in ev.get("must_keep", []):
-        plan["segments"].append({"start": to_sec(a), "end": to_sec(b), "label": "Performance",
-                                 "speaker": "", "role": ""})
+    for rng in ev.get("must_keep", []):
+        try:
+            a, b = rng
+            plan["segments"].append({"start": parse_time(a), "end": parse_time(b), "label": "Performance",
+                                     "speaker": "", "role": ""})
+        except (ValueError, TypeError):
+            sys.exit(f'plan: event.json must_keep entry {rng!r} is not ["start", "end"], e.g. ["00:42:10", "00:47:30"]')
 
     plan["title"], plan["subtitle"] = title, subtitle
     plan["segments"] = clean_ranges(plan["segments"], total, 3.0)

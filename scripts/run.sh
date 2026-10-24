@@ -11,6 +11,9 @@ PY=python3; [ -x .venv/bin/python ] && PY=.venv/bin/python
 
 src="${1:?usage: scripts/run.sh <video> [job-id]}"
 [ -f "$src" ] || { echo "not found: $src" >&2; exit 1; }
+$PY scripts/doctor.py --quiet || exit 1   # before the job exists, so a config problem never marks the file failed
+# shellcheck source=scripts/lock.sh
+source scripts/lock.sh; studio_lock
 
 base="$(basename "$src")"
 if [ -n "${2:-}" ]; then

@@ -28,6 +28,8 @@ jobs:
         run: shellcheck -S error scripts/*.sh setup.sh tests/*.sh
       - name: Config is valid JSON
         run: python -c "import json; [json.load(open(f)) for f in ('config/brand.json', 'event.example.json')]"
+      - name: Unit tests (JSON parsing, plan validation, times, pause cuts)
+        run: python -m unittest discover -s tests -v
 
   smoke:
     runs-on: ubuntu-latest

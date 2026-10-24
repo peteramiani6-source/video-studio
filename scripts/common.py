@@ -77,6 +77,38 @@ def fmt_ts(sec):
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+def parse_time(v):
+    """Seconds from 95, 95.5, "95", "1:35", "01:01:35" or "00:01:35,500". Raises ValueError otherwise."""
+    if isinstance(v, bool):
+        raise ValueError(f"not a time: {v!r}")
+    if isinstance(v, (int, float)):
+        return float(v)
+    sec = 0.0
+    parts = str(v).strip().replace(",", ".").split(":")
+    if not parts or len(parts) > 3:
+        raise ValueError(f"not a time: {v!r}")
+    for part in parts:
+        sec = sec * 60 + float(part)
+    return sec
+
+
+def clean_range(item, total=None):
+    """Validate one {"start", "end", ...} item from a model or a hand-edited JSON file.
+    Returns a copy with float start/end (clamped to 0..total), or None if it can't be used."""
+    if not isinstance(item, dict) or "start" not in item or "end" not in item:
+        return None
+    try:
+        s, e = parse_time(item["start"]), parse_time(item["end"])
+    except (ValueError, TypeError):
+        return None
+    s = max(0.0, s)
+    if total is not None:
+        e = min(float(total), e)
+    if e <= s:
+        return None
+    return {**item, "start": s, "end": e}
+
+
 def parse_ts(ts):
     h, m, rest = ts.strip().replace(".", ",").split(":")
     s, ms = rest.split(",")

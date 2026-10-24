@@ -54,6 +54,13 @@ Each clip's `hook` is burned into its first seconds (styling under `hook` in `co
 
 To resume a failed job after fixing the cause, run `scripts/run.sh inbox/<file> <job>`. It skips the steps that already have output and archives the source when it succeeds.
 
+## Resuming and checking
+
+- **A failed event:** fix the cause, then run `scripts/event.sh --resume <job-id>`. Merge, transcription and (on resume) the plan are skipped when their output exists. To re-plan, delete `work/<job>/plan.json` first.
+- **Before anything runs:** `run.sh` and `event.sh` call `scripts/doctor.py`, which checks ffmpeg, the Whisper setup and the `PICKER` login or key. If it prints FAIL lines, fix those first. Run `python3 scripts/doctor.py` any time to see the full check.
+- **Unusable model replies:** the plan step retries once with the error, then fails, leaving `plan.json` as it was. The raw replies are kept in `work/<job>/plan_raw.txt`.
+- **One job at a time:** a second `run.sh` or `event.sh` waits for the first one to finish.
+
 ## Models (`config/models.env`)
 
 - `PICKER=claude-code` is the default. It uses the user's Claude subscription through the `claude` CLI, so no API key is needed. Other options are `claude` (API), `gemini` and `none`.

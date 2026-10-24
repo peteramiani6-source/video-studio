@@ -7,8 +7,8 @@ snapped to sentence boundaries, length-limited and de-overlapped.
 import json
 import sys
 
-from common import duration, env, job_dir, log, parse_srt
-from llm import ask, extract_json
+from common import clean_range, duration, env, job_dir, log, parse_srt
+from llm import ask_json
 
 PROMPT = """You are a short-form video editor. Below is a timestamped transcript (seconds).
 Pick the {n} strongest self-contained moments for Instagram Reels / TikTok / Shorts.
@@ -37,11 +37,33 @@ def evenly_spaced(total, n, lo, hi):
              "hook": "", "caption": "", "hashtags": []} for i in range(k)]
 
 
+def validate_clips(items, total=None, allow_empty=False):
+    """Keep only usable clip entries: numeric/parsable start < end, text fields as strings.
+    Raises ValueError when nothing usable is left (unless allow_empty)."""
+    if not isinstance(items, list):
+        raise ValueError("expected a JSON array of clips")
+    out = []
+    for it in items:
+        c = clean_range(it, total)
+        if c is None:
+            continue
+        for k in ("title", "hook", "caption"):
+            c[k] = str(c.get(k) or "")
+        tags = c.get("hashtags") or []
+        c["hashtags"] = [str(t) for t in tags] if isinstance(tags, list) else str(tags).split()
+        out.append(c)
+    if not out and not allow_empty:
+        raise ValueError("no clip has a usable start and end")
+    return out
+
+
 def snap(clips, segs, total, lo, hi):
+    if not segs:
+        return []
     starts = [s["start"] for s in segs]
     ends = [s["end"] for s in segs]
     out = []
-    for c in sorted(clips, key=lambda c: float(c["start"])):
+    for c in sorted(validate_clips(clips, total, allow_empty=True), key=lambda c: c["start"]):
         s = min(starts, key=lambda x: abs(x - float(c["start"])))
         e_candidates = [x for x in ends if lo <= x - s <= hi] or [min(total, s + hi)]
         e = min(e_candidates, key=lambda x: abs(x - float(c["end"])))
@@ -71,9 +93,9 @@ def main():
     clips = None
     if picker != "none":
         try:
-            raw = ask(prompt)
-            (wd / "picker_raw.txt").write_text(raw)
-            clips = extract_json(raw)
+            raw_path = wd / "picker_raw.txt"
+            raw_path.unlink(missing_ok=True)
+            clips = ask_json(prompt, "array", lambda x: validate_clips(x, total), raw_path)
             log(job, f"pick: {picker} proposed {len(clips)} clips")
         except Exception as e:  # unattended runs fall back rather than stall
             log(job, f"pick: WARNING {picker} failed ({type(e).__name__}: {e}); using evenly spaced clips")
