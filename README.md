@@ -98,6 +98,8 @@ inbox/ work/ out/ archive/ logs/
 
 - Each step is safe to re-run. To tweak one clip, edit `work/<job>/clips.json` and run
   `python3 scripts/render.py <job> --only 3`.
+- `tests/smoke.sh` renders a generated test video through both modes with real FFmpeg and no models.
+  GitHub Actions runs it on every pull request (`.github/workflows/ci.yml`).
 - To resume a failed clip job, run `scripts/run.sh inbox/<file> <job>`. Finished steps are skipped.
 - Each clip opens with its `hook` on screen. Style it, or turn it off, under `hook` in `config/brand.json`.
 - A failed file goes into `logs/failed.txt` and the watcher skips it. Delete that line to retry.
