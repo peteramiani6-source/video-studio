@@ -15,7 +15,8 @@ import llm  # noqa: E402
 from common import clean_range, parse_srt, parse_time, write_srt  # noqa: E402
 from pick_clips import snap, validate_clips  # noqa: E402
 from plan_event import clean_ranges, validate_plan  # noqa: E402
-from render import keep_ranges, remap  # noqa: E402
+import look  # noqa: E402
+from render import hook_filters, keep_ranges, remap  # noqa: E402
 
 
 class ExtractJson(unittest.TestCase):
@@ -164,6 +165,57 @@ class PauseCuts(unittest.TestCase):
         self.assertAlmostEqual(remap(1.0, r), 1.0)
         self.assertAlmostEqual(remap(5.0, r), 2.1 + 0.2)
         self.assertAlmostEqual(remap(3.0, r), 2.1)  # inside the cut: lands on the next kept range
+
+
+class Look(unittest.TestCase):
+    def test_color_is_skipped_when_neutral(self):
+        self.assertEqual(look.color_filters(look.DEFAULTS), [])
+        self.assertEqual(look.color_filters({**look.DEFAULTS, "contrast": 1.08, "saturation": 1.25}),
+                         ["eq=contrast=1.08:saturation=1.25:brightness=0:gamma=1"])
+
+    def test_wind_filter(self):
+        self.assertEqual(look.audio_filters({"wind_filter": True, "wind_cutoff_hz": 120}), ["highpass=f=120"])
+        self.assertEqual(look.audio_filters({"wind_filter": False}), [])
+
+    def test_stabilize_modes(self):
+        self.assertEqual(look.stabilize_filters({"stabilize": "off"}, "x", 0, 1, 30, ".", "n"), [])
+        self.assertEqual(look.stabilize_filters({"stabilize": "deshake"}, "x", 0, 1, 30, ".", "n"), ["deshake"])
+        self.assertEqual(look.stabilize_mode({"stabilize": "bogus"}), "off")
+        with mock.patch.object(look, "has_filter", return_value=False):
+            self.assertEqual(look.stabilize_mode({"stabilize": "vidstab"}), "deshake")
+
+    def test_vidstab_runs_detect_pass_then_transforms(self):
+        with mock.patch.object(look, "has_filter", return_value=True), \
+                mock.patch.object(look.subprocess, "run") as run:
+            f = look.stabilize_filters({"stabilize": "vidstab", "stabilize_zoom": 5}, "src.mp4", 2, 8, 30, ".", "c1")
+        self.assertIn("vidstabdetect", " ".join(run.call_args[0][0]))
+        self.assertTrue(f[0].startswith("vidstabtransform=input=c1.trf") and "zoom=5" in f[0])
+
+
+class Hook(unittest.TestCase):
+    CFG = {"seconds": 1.5, "font_size": 84, "anchor": "bottom", "y": 0.61, "shadow": 5, "outline": 3,
+           "box": False, "max_chars_per_line": 16}
+
+    def render(self, cfg):
+        with tempfile.TemporaryDirectory() as d:
+            return hook_filters("Behind the scenes of our garden interview", "c", Path(d), cfg, 1920, "DejaVu Sans")
+
+    def test_bottom_anchor_ends_above_y(self):
+        f = self.render(self.CFG)
+        ys = [int(x.split(":y=")[1].split(":")[0]) for x in f]
+        self.assertEqual(len(f), 3)
+        self.assertLessEqual(ys[-1] + 84, int(1920 * 0.61))
+        self.assertTrue(all("shadowx=5" in x and "borderw=3" in x and "box=1" not in x for x in f))
+        self.assertIn("enable='lt(t,1.5)'", f[0])
+
+    def test_box_and_top_anchor(self):
+        f = self.render({**self.CFG, "anchor": "top", "box": True, "shadow": 0})
+        self.assertEqual(int(f[0].split(":y=")[1].split(":")[0]), int(1920 * 0.61))
+        self.assertIn("box=1", f[0])
+        self.assertNotIn("shadowx", f[0])
+
+    def test_disabled(self):
+        self.assertEqual(self.render({**self.CFG, "enabled": False}), [])
 
 
 class LlmSubscriptionEnv(unittest.TestCase):

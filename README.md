@@ -91,11 +91,14 @@ deploy/video-studio.service   systemd user unit
 remotion/                     code-generated videos
 assets/                       optional logo.png and intro_music.mp3
 event.example.json            event details template
+SHOOTING.md                   on-set checklist (focus, glare, framing, audio)
 inbox/ work/ out/ archive/ logs/
 ```
 
 ## Notes
 
+- **Before you shoot:** read `SHOOTING.md`. Focus, glare and a cluttered frame can't be fixed in the edit.
+- **Look:** colour, stabilization and the wind filter live under `look` in `config/brand.json` (`stabilize`: `off` / `deshake` / `vidstab`).
 - `python3 scripts/doctor.py` checks that ffmpeg, Whisper and your chosen model (login or key) are ready. `run.sh` and `event.sh` run it automatically first.
 - Resume a failed event with `scripts/event.sh --resume <job-id>`. Finished steps (the merge and the long transcription) are skipped.
 - Only one job renders at a time. A second one waits instead of slowing both down.

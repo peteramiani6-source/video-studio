@@ -15,13 +15,29 @@
   },
   "hook": {
     "enabled": true,
-    "seconds": 3,
-    "font_size": 68,
+    "seconds": 1.5,
+    "font_size": 84,
     "color": "#FFFFFF",
+    "anchor": "bottom",
+    "y": 0.61,
+    "shadow": 5,
+    "shadow_color": "#000000",
+    "outline": 3,
+    "outline_color": "#000000",
+    "box": false,
     "box_color": "#000000",
     "box_opacity": 0.6,
-    "y": 0.16,
-    "max_chars_per_line": 18
+    "max_chars_per_line": 16
+  },
+  "look": {
+    "contrast": 1.08,
+    "saturation": 1.25,
+    "brightness": 0.0,
+    "gamma": 1.0,
+    "stabilize": "off",
+    "stabilize_zoom": 5,
+    "wind_filter": true,
+    "wind_cutoff_hz": 100
   },
   "video": {
     "crf": 20,

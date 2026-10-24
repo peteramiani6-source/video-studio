@@ -61,6 +61,19 @@ To resume a failed job after fixing the cause, run `scripts/run.sh inbox/<file> 
 - **Unusable model replies:** the plan step retries once with the error, then fails, leaving `plan.json` as it was. The raw replies are kept in `work/<job>/plan_raw.txt`.
 - **One job at a time:** a second `run.sh` or `event.sh` waits for the first one to finish.
 
+## Look and feel (`config/brand.json`)
+
+- **`look`**: `contrast` and `saturation` (eq filter), `stabilize` (`off`, `deshake` or `vidstab`; vidstab is smoothest but renders about 5× slower), `wind_filter` (a high-pass at `wind_cutoff_hz`). These apply to both clip and event renders.
+- **`hook`**: `seconds` (1.5), `font_size`, `anchor` (`bottom` sits just above the captions at `y`), `shadow`, `outline`, `box`.
+
+Map feedback to settings:
+- **"Shaky":** set `stabilize` to `vidstab`.
+- **"Washed out":** raise `saturation`, or `contrast` a little.
+- **"Windy":** keep `wind_filter` on, and say that a lapel mic is the real fix.
+- **"Text too long, too small or hard to read":** change `hook.seconds`, `font_size` or `shadow`.
+
+Focus, glare and a cluttered frame are shooting problems. Point the user to `SHOOTING.md` rather than promising an edit fix.
+
 ## Models (`config/models.env`)
 
 - `PICKER=claude-code` is the default. It uses the user's Claude subscription through the `claude` CLI, so no API key is needed. Other options are `claude` (API), `gemini` and `none`.
