@@ -10,3 +10,9 @@ remotion/node_modules/
 remotion/out/
 __pycache__/
 *.lock
+remotion/public/jobs/
+scripture/audio/*
+!scripture/audio/README.md
+scripture/music/*
+!scripture/music/README.md
+!inbox/README.md

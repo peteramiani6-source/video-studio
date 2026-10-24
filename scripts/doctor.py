@@ -1,6 +1,9 @@
 """Preflight: check that the tools and models chosen in config/models.env are actually usable.
 
-Usage: python3 scripts/doctor.py [--quiet]
+Usage: python3 scripts/doctor.py [--quiet] [--mode video|scripture|scripture-write]
+  video (default): everything the clip, event and montage modes need
+  scripture: ffmpeg + Node + the Remotion project (no transcription, no model)
+  scripture-write: only the model (PICKER) used to draft episodes
 Run by setup.sh, run.sh and event.sh before any work starts, so a missing login, key or
 library fails in seconds with a clear fix instead of halfway through a long job.
 --quiet prints only problems. Exit code 1 if anything required is missing.
@@ -31,8 +34,20 @@ def want(ok, label, fix):
     (oks if ok else warnings).append(label if ok else f"{label}: {fix}")
 
 
+def check_remotion():
+    need(shutil.which("node") and shutil.which("npx"), "Node.js (for Remotion)",
+         "install Node 18+ (sudo apt install nodejs npm, or nvm)")
+    need((ROOT / "remotion" / "node_modules" / "remotion").exists(), "remotion/node_modules",
+         "run `npm ci` inside remotion/ (setup.sh does this)")
+    need((ROOT / "scripture" / "data" / "kjv.json.gz").exists(), "scripture/data/kjv.json.gz", "restore it from git")
+
+
 def main():
     quiet = "--quiet" in sys.argv
+    mode = sys.argv[sys.argv.index("--mode") + 1] if "--mode" in sys.argv else "video"
+    if mode == "scripture-write":
+        check_picker()
+        return report(quiet)
 
     # FFmpeg and the filters the renders rely on
     ff = shutil.which("ffmpeg")
@@ -61,6 +76,10 @@ def main():
     except ValueError:
         problems.append("clip lengths: CLIP_MIN / CLIP_MAX must be numbers")
 
+    if mode == "scripture":
+        check_remotion()
+        return report(quiet)
+
     # Transcription
     stt = env("STT", "local")
     if stt == "local":
@@ -72,6 +91,11 @@ def main():
     else:
         problems.append(f"STT={stt}: use local or groq")
 
+    check_picker()
+    return report(quiet)
+
+
+def check_picker():
     # Editing decisions
     picker = env("PICKER", "claude-code")
     if picker == "claude-code":
@@ -88,6 +112,8 @@ def main():
     else:
         problems.append(f"PICKER={picker}: use claude-code, claude, gemini or none")
 
+
+def report(quiet):
     if not quiet:
         for o in oks:
             print(f"  ok    {o}")

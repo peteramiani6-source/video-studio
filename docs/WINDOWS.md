@@ -25,7 +25,7 @@ Restart Windows, open **Ubuntu** from the Start menu, and create a Linux usernam
 
 ```bash
 sudo apt update
-sudo apt install -y ffmpeg python3-venv python3-pip inotify-tools git gh
+sudo apt install -y ffmpeg python3-venv python3-pip inotify-tools git gh nodejs npm
 curl -fsSL https://claude.ai/install.sh | bash     # Claude Code, installs to ~/.local/bin
 ```
 

@@ -1,130 +1,96 @@
 # video-studio
 
-Two things it does:
+Video editing driven from the terminal by Claude Code. A model makes the judgment calls (which moments, which shots, what words). FFmpeg and Remotion do all the cutting and rendering, so results are repeatable and free to re-render.
 
-- **Event mode:** turns a long event recording (or a folder of phone and camera clips) into a finished video. You get a title card, the dead time cut out, each talk kept whole, speaker lower-thirds, fades, balanced audio and an end card. You also get a highlight reel, subtitles, YouTube chapters and vertical social clips.
-- **Montage mode:** for short edits judged on the picture (behind the scenes, promos, recaps). The editor looks at a keyframe of every shot, skips blurry and shaky ones, puts the shots in story order (wide → close-ups → a human ending), and slides the vertical crop onto the people.
-- **Clip mode:** drop a talk or podcast into `inbox/` and get captioned 9:16 clips, plus a `captions.md` ready to post.
-
-Claude Code orchestrates through the `video-edit` skill. A model handles judgment calls only (choosing moments and writing copy). FFmpeg does all the cutting and rendering.
-
-```
-inbox/ -> [1 prepare] -> [2 transcribe] -> [3 pick clips] -> [4 render + cut pauses] -> out/<job>/
-          stream copy    Whisper/Groq      Claude/Gemini      FFmpeg
-```
+| Mode | For | Command | Result |
+|---|---|---|---|
+| **Event** | a long recording: fireside, conference, service | `scripts/event.sh` | full edit, highlight reel, subtitles, YouTube chapters, social clips |
+| **Montage** | short edits judged on the picture: behind the scenes, promos, recaps | `scripts/montage.sh` | a shot-based cut, in story order, with the crop following the people |
+| **Clip** | a talk or podcast | `scripts/run.sh` | captioned 9:16 clips plus post captions |
+| **Scripture** | animated verse videos ("One Verse, Real Life") | `scripts/scripture.sh` | verse + reflection + "live it" points, vertical and/or wide |
 
 ## Quick start
 
 ```bash
-./setup.sh                              # venv, deps, tool checks
-claude                                  # log in once with your Claude subscription, then /exit
-cp ~/Videos/episode1.mp4 inbox/
-scripts/run.sh inbox/episode1.mp4       # run once by hand first
+./setup.sh                 # Python venv, Remotion (npm ci), tool checks
+claude                     # log in once with your Claude subscription, then /exit
 ```
+
+On Windows, everything runs in WSL2. See [docs/WINDOWS.md](docs/WINDOWS.md).
 
 ### Edit a whole event
-
 ```bash
-cp event.example.json "inbox/Fireside Night/event.json"   # optional: speakers, notes, must_keep
+cp config/event.example.json "inbox/Fireside Night/event.json"   # optional: speakers, notes, must_keep
 scripts/event.sh "inbox/Fireside Night" "YSA Fireside Evening" "Langata Ward | 14 Nov 2026"
 ```
-
-The results go to `out/event-.../`:
-
-| File | What it is |
-|---|---|
-| `event_full.mp4` | The finished edit (1080p) |
-| `event_highlights.mp4` | A 1–2 minute highlight reel |
-| `event_full.srt` | Subtitles matched to the edited video |
-| `youtube.md` | Title, description and chapters to paste into YouTube |
-| `clip_NN_*.mp4` | Vertical clips for Reels, Shorts and TikTok |
-| `captions.md` | Captions for those clips |
-
-To review the edit, open `work/<job>/plan.json`, or run `claude` and just ask (for example "drop the announcements", "Grace's surname is spelled Wanjirũ", "make it under 20 minutes"). It updates the plan and re-renders without re-transcribing. While iterating, `python3 scripts/render_event.py <job> --draft --skip-highlights` renders a fast half-resolution preview (`event_full_draft.mp4`).
+Results go to `out/event-…/`: `event_full.mp4`, `event_highlights.mp4`, `event_full.srt`, `youtube.md`, plus vertical clips and `captions.md`. To change the edit, ask Claude Code ("drop the announcements", "make it under 20 minutes"). It edits `work/<job>/plan.json` and re-renders without re-transcribing.
 
 ### Make a behind-the-scenes or promo montage
-
 ```bash
 scripts/montage.sh "inbox/Garden BTS" "behind the scenes of our garden interview"
 ```
+Claude looks at a keyframe of every shot, skips blurry and shaky ones, and orders the shots: wide → close-ups → a human ending. The result is `montage.mp4` plus `montage.md` (the cut list, with a reason for each shot).
 
-The result is `out/montage-.../montage.mp4` plus `montage.md` (the hook, caption, hashtags and the cut list with reasons). To see what the editor saw, open the contact sheets in `work/<job>/frames/`. To change the cut, edit `work/<job>/edit.json` (or ask Claude Code, for example "open on the wide shot, less tripod"), then run `python3 scripts/render_shots.py <job>`.
-
-### Clips on autopilot
-
+### Clips from a talk or podcast
 ```bash
-scripts/watch.sh                        # runs the pipeline; Claude Code steps in only if a step fails
-MODE=claude scripts/watch.sh            # Claude Code processes every file
-MODE=direct scripts/watch.sh            # never calls Claude Code
+scripts/run.sh inbox/episode1.mp4
+scripts/watch.sh           # or leave this running: every video dropped in inbox/ becomes clips
 ```
 
-**On Windows:** see `WINDOWS.md` (WSL2 setup, Explorer inbox, auto-start). On Linux, see `deploy/video-studio.service`.
+### Scripture episodes
+```bash
+scripts/scripture.sh new "Proverbs 3:5-6" --theme "decisions after school"   # Claude drafts the words
+scripts/scripture.sh show ep004                                               # read it as a script
+# review it, fix anything, set "reviewed": true in scripture/episodes/ep004.json
+scripts/scripture.sh render ep004                                             # -> out/scripture/ep004/
+scripts/scripture.sh render --all                                             # every reviewed episode
+```
+The verse is always the exact KJV text from the bundled Bible. Claude only writes the words around it, and nothing renders until a person has reviewed it. See [scripture/README.md](scripture/README.md).
 
-## Ask Claude Code
+## Folder guide
 
-Run `claude` in this folder, then ask things like:
-- "Process inbox/episode2.mp4"
-- "Clip 3 of the last job starts too early, start it at the question instead and re-render"
-- "Make the captions bigger and yellow"
-- "Give me 6 clips of 20-30 seconds from the last job"
+Each folder has its own README with the details.
+
+| Folder | What's in it |
+|---|---|
+| [`scripts/`](scripts/README.md) | the pipeline: one entry script per mode, plus the steps they run |
+| [`config/`](config/README.md) | `models.env` (which AI does what), `brand.json` (look, captions, hook, scripture brand), event template |
+| [`remotion/`](remotion/README.md) | animation templates in React (the scripture episode), fonts |
+| [`scripture/`](scripture/README.md) | episodes, the bundled KJV, your voiceovers and music |
+| [`assets/`](assets/README.md) | logo and intro music for event videos |
+| [`docs/`](docs/README.md) | Windows/WSL setup, shooting checklist |
+| [`tests/`](tests/README.md) | unit tests and the end-to-end render test CI runs |
+| [`deploy/`](deploy/README.md) | systemd service that keeps the inbox watcher running |
+| [`inbox/`](inbox/README.md) | drop recordings here |
+| `work/`, `out/`, `archive/`, `logs/` | created on the first run (not in git): job scratch, results, processed sources, logs |
+| `.claude/skills/video-edit/` | the skill Claude Code follows in this folder |
 
 ## Which AI does what
 
 | Step | Default | Switch in `config/models.env` |
 |---|---|---|
-| Orchestration | Scripts; Claude Code fixes failures | `MODE=claude` / `MODE=direct` in the watcher |
-| Transcription | faster-whisper (local) | `STT=groq` |
-| Edit decisions, clip picking, copy | Your Claude subscription via Claude Code | `PICKER=claude` (API), `gemini`, `none` |
-| Shot choice in montages (sees the frames) | Your Claude subscription via Claude Code | same `PICKER` setting |
-| Cut / reframe / captions | FFmpeg | — |
-| Pause removal (inside clips) | FFmpeg, from word timestamps | `SILENCE_CUT=0` |
+| Orchestration | the scripts; Claude Code fixes failures | `MODE=claude` / `MODE=direct` in the watcher |
+| Transcription | faster-whisper on your CPU | `STT=groq` (much faster for long recordings) |
+| Edit decisions, clip and shot choice, writing | your Claude subscription through Claude Code | `PICKER=claude` (API), `gemini`, `none` |
+| Cutting, cropping, captions, rendering | FFmpeg | none |
+| Animation | Remotion (React, rendered in headless Chrome) | none |
 
-## Layout
+With a Claude subscription you need no API keys. `.env` is only for Groq (fast transcription) or API billing.
 
-```
-CLAUDE.md                     rules Claude Code follows here
-.claude/skills/video-edit/    the skill (auto-loaded by Claude Code in this folder)
-config/models.env             model routing + clip rules
-config/brand.json             caption font/colours, output size, encode quality
-scripts/event.sh              event mode: full edited video
-scripts/merge.py              joins and normalises event clips
-scripts/plan_event.py         the model writes the edit (plan.json)
-scripts/render_event.py       title/end cards, segments, lower-thirds, highlights, SRT, chapters
-scripts/llm.py                one place for model calls (subscription, API or Gemini)
-scripts/montage.sh            montage mode: shot-based edit from what the camera saw
-scripts/shots.py              scene cuts, sharpness, motion, keyframes, contact sheets
-scripts/plan_shots.py         the model looks at the sheets and orders the shots (edit.json)
-scripts/render_shots.py       renders edit.json: crop follows the subject, look, captions, hook
-scripts/run.sh                clip mode: full pipeline for one file
-scripts/prepare.sh            step 1 (stream copy, no re-encode)
-scripts/transcribe.py         step 2
-scripts/pick_clips.py         step 3
-scripts/render.py             step 4
-scripts/watch.sh              inbox watcher (inotify / fswatch / polling)
-deploy/video-studio.service   systemd user unit
-remotion/                     code-generated videos
-assets/                       optional logo.png and intro_music.mp3
-event.example.json            event details template
-SHOOTING.md                   on-set checklist (focus, glare, framing, audio)
-inbox/ work/ out/ archive/ logs/
-```
+## Ask Claude Code
 
-## Notes
+Run `claude` in this folder, then ask things like:
+- "Process inbox/episode2.mp4"
+- "Clip 3 of the last job starts too early, start it at the question instead"
+- "Open the montage on the wide shot and use less of the tripod"
+- "Draft three episodes on patience, then show me the scripts"
+- "Make the scripture accent colour green and re-render ep002"
 
-- **Before you shoot:** read `SHOOTING.md`. Focus, glare and a cluttered frame can't be fixed in the edit.
-- **Look:** colour, stabilization and the wind filter live under `look` in `config/brand.json` (`stabilize`: `off` / `deshake` / `vidstab`).
-- `python3 scripts/doctor.py` checks that ffmpeg, Whisper and your chosen model (login or key) are ready. `run.sh` and `event.sh` run it automatically first.
-- Resume a failed event with `scripts/event.sh --resume <job-id>`. Finished steps (the merge and the long transcription) are skipped.
-- Only one job renders at a time. A second one waits instead of slowing both down.
-- Run `python3 -m unittest discover -s tests` for the fast unit tests, and `tests/smoke.sh` for the full render test.
+## Good to know
 
-- Each step is safe to re-run. To tweak one clip, edit `work/<job>/clips.json` and run
-  `python3 scripts/render.py <job> --only 3`.
-- `tests/smoke.sh` renders a generated test video through both modes with real FFmpeg and no models.
-  GitHub Actions runs it on every pull request (`.github/workflows/ci.yml`).
-- To resume a failed clip job, run `scripts/run.sh inbox/<file> <job>`. Finished steps are skipped.
-- Each clip opens with its `hook` on screen. Style it, or turn it off, under `hook` in `config/brand.json`.
-- A failed file goes into `logs/failed.txt` and the watcher skips it. Delete that line to retry.
-- Whisper model size: `small` works fine on CPU. Use `medium` or `large-v3` with a GPU, or `STT=groq`.
-- With a Claude subscription you need no API keys. `.env` is only for Groq (fast transcription) or API billing.
-- Long events on CPU: transcription takes about as long as the recording. `STT=groq` takes minutes instead.
+- **Before you shoot:** read [docs/SHOOTING.md](docs/SHOOTING.md). Focus, glare and a cluttered frame can't be fixed in the edit.
+- **Health check:** `python3 scripts/doctor.py` checks ffmpeg, Whisper and your model login or key. Every mode runs it first.
+- **Resume:** a failed job can be resumed: `scripts/event.sh --resume <job>`, `scripts/montage.sh --resume <job>`, `scripts/run.sh <file> <job>`. Finished steps are skipped.
+- **One job at a time:** a second job waits for the first instead of slowing both down.
+- **Tests:** `python3 -m unittest discover -s tests` (fast) and `tests/smoke.sh` (full renders). CI runs both on every pull request.
+- **Long recordings on CPU:** transcription takes about as long as the recording. `STT=groq` takes minutes instead.
