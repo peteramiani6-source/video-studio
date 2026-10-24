@@ -22,11 +22,12 @@ type Props = {
   talking?: boolean;
   colors?: CharacterColors;
   blinkSeed?: number;
+  mouthLevels?: number[]; // lip sync: per frame 0 closed, 1 half, 2 open (overrides the talking loop)
 };
 
 const W = 7; // line width
 
-export const Character: React.FC<Props> = ({pose, fromPose, transition = 1, face, talking = false, colors = DEFAULT_COLORS, blinkSeed = 0}) => {
+export const Character: React.FC<Props> = ({pose, fromPose, transition = 1, face, talking = false, colors = DEFAULT_COLORS, blinkSeed = 0, mouthLevels}) => {
   const frame = useCurrentFrame();
   const p = blendPose(POSES[fromPose ?? pose], POSES[pose], transition);
   const {eyes, mouth} = FACES[face];
@@ -34,9 +35,12 @@ export const Character: React.FC<Props> = ({pose, fromPose, transition = 1, face
   // life: breathing, blinking, a little bob while talking, waving hand
   const breathe = Math.sin(frame / 14) * 2.5;
   const blinking = (frame + blinkSeed * 37) % 96 < 4 && (eyes === 'dot' || eyes === 'wide' || eyes === 'worried');
-  const mouthNow: Mouth = talking && Math.floor(frame / 4) % 2 === 0 ? 'open' : mouth;
+  const level = mouthLevels?.length ? mouthLevels[Math.min(frame, mouthLevels.length - 1)] ?? 0 : -1;
+  const mouthNow: Mouth = !talking ? mouth : level >= 0 ? (level === 2 ? 'open' : level === 1 ? 'half' : mouth)
+    : Math.floor(frame / 4) % 2 === 0 ? 'open' : mouth;
+  const speaking = talking && (level < 0 || level > 0);
   const wave = pose === 'wave' ? Math.sin(frame / 3) * 18 : 0;
-  const talkBob = talking ? Math.sin(frame / 2.5) * 6 : 0;
+  const talkBob = speaking ? Math.sin(frame / 2.5) * 6 : 0;
 
   const rh: Point = [p.rh[0] + wave, p.rh[1] + (pose === 'talk' ? talkBob : 0)];
   const L = elbow(ARM.ls, p.lh, 'l');
@@ -155,6 +159,8 @@ const MouthShape: React.FC<{kind: Mouth; line: string}> = ({kind, line}) => {
   switch (kind) {
     case 'open':
       return <ellipse cx={200} cy={y} rx={16} ry={13} fill={line} />;
+    case 'half':
+      return <ellipse cx={200} cy={y} rx={14} ry={6} fill={line} />;
     case 'smile':
       return <path d={`M178 ${y - 4} q22 20 44 0`} fill="none" stroke={line} strokeWidth={5} strokeLinecap="round" />;
     case 'grin':

@@ -6,6 +6,7 @@ Usage:
   python3 scripts/scripture.py check [<id> ...]
   python3 scripts/scripture.py render <id> [--draft] [--format vertical|wide|both]
   python3 scripts/scripture.py render --all [--draft]
+  (voiceover: python3 scripts/voice.py <id>, or scripts/scripture.sh voice <id>)
 
 Episodes live in scripture/episodes/<id>.json. The verse text always comes from the bundled public-domain
 KJV (scripture/data/kjv.json.gz), never from the model: `new` asks the model only for the hook, the
@@ -26,6 +27,7 @@ from pathlib import Path
 
 from common import ROOT, brand, duration, env, has_audio, log
 from llm import ask_json
+import voice
 
 SCRIPTURE = ROOT / "scripture"
 EPISODES = SCRIPTURE / "episodes"
@@ -138,7 +140,7 @@ LIMITS = {"hook": 70, "reflection": 420, "apply_item": 90, "closing": 90}
 # Must match remotion/src/character/poses.ts (a unit test checks they stay in sync)
 POSES = ("idle", "talk", "shrug", "think", "facepalm", "panic", "pray", "laugh", "wave", "lying")
 FACES = ("neutral", "deadpan", "wide", "worried", "happy", "peace", "laugh")
-SKIT = {"caption": 60, "thought": 18, "thoughts": 6, "min_s": 0.6, "max_s": 6.0, "total_s": 20.0, "beats": 8}
+SKIT = {"caption": 60, "say": 90, "thought": 18, "thoughts": 6, "min_s": 0.6, "max_s": 6.0, "total_s": 20.0, "beats": 8}
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
@@ -167,6 +169,8 @@ def validate_skit(skit):
             probs.append(f'skit beat {i}: bg must be a colour like "#FFFFFF" or "flash"')
         if len(str(b.get("caption", ""))) > SKIT["caption"]:
             probs.append(f"skit beat {i}: caption is over {SKIT['caption']} characters")
+        if len(str(b.get("say", ""))) > SKIT["say"]:
+            probs.append(f"skit beat {i}: say is over {SKIT['say']} characters")
         th = b.get("thoughts") or []
         if not isinstance(th, list) or len(th) > SKIT["thoughts"] or any(len(str(t)) > SKIT["thought"] for t in th):
             probs.append(f"skit beat {i}: thoughts must be up to {SKIT['thoughts']} short words")
@@ -184,7 +188,8 @@ def validate_skit(skit):
 
 def normalize_skit(skit):
     return [{"shot": b.get("shot", "wide"), "bg": b.get("bg", "#FFFFFF"), "pose": b.get("pose", "idle"),
-             "face": b.get("face", "neutral"), "caption": str(b.get("caption", "")), "talk": bool(b.get("talk", False)),
+             "face": b.get("face", "neutral"), "caption": str(b.get("caption", "")),
+             "say": str(b.get("say", "")), "talk": bool(b.get("talk", False) or b.get("say")),
              "thoughts": [str(t) for t in (b.get("thoughts") or [])], "seconds": float(b.get("seconds", 2))}
             for b in (skit or [])]
 
@@ -221,6 +226,11 @@ def validate_episode(ep, fix_verse=False):
     for key in ("voiceover", "music"):
         if ep.get(key) and not (SCRIPTURE / ep[key]).exists():
             problems.append(f'{key} file scripture/{ep[key]} not found')
+    if not problems and ep.get("voiceover"):
+        try:
+            voice.timing_for(ep)  # an AI voiceover generated from different words would render out of sync
+        except ValueError as e:
+            problems.append(str(e))
     return problems
 
 
@@ -267,6 +277,7 @@ SKIT_RULES = """- "skit": a short comic opening (3-6 beats, under 18 seconds in 
   The last beat should be a quiet "wait..." moment that leads into the verse.
   Each beat: {{"shot": "wide|closeup", "bg": "#FFFFFF" or another calm hex colour, or "flash" for a chaotic moment,
   "pose": one of {poses}, "face": one of {faces}, "caption": max 60 characters (shown big, comic style),
+  "say": the words the character speaks out loud, for the voiceover (or "" for a silent beat; can differ from the caption),
   "talk": true if the character is speaking, "thoughts": up to 6 one-word worries popping around the head (or []),
   "seconds": 0.6-6}}.
 """
@@ -326,6 +337,8 @@ def show(ep):
         extra = f"  thoughts: {', '.join(b.get('thoughts', []))}" if b.get("thoughts") else ""
         print(f"SKIT {i}      [{b.get('shot', 'wide')}, {b.get('pose')}, {b.get('face')}, {b.get('seconds')}s] "
               f"{b.get('caption', '')}{extra}")
+        if voice.say_text(b):
+            print(f"  SAYS      \"{voice.say_text(b)}\"")
     print(f"VERSE       \"{ep.get('verse', '')}\"")
     print(f"REFLECTION  {ep.get('reflection', '')}")
     for i, a in enumerate(ep.get("apply", []), 1):
@@ -362,7 +375,13 @@ def plan_scenes(ep, s, vo_seconds=None):
 
 
 def episode_seconds(ep, s=None):
-    """Planned length without a voiceover (with one, the video follows the voiceover)."""
+    """Planned length: the AI voiceover's timing if there is one, else reading speed (own recordings set their own length)."""
+    try:
+        t = voice.timing_for(ep)
+    except ValueError:
+        t = None
+    if t:
+        return t["seconds"]
     return sum(sc["frames"] for sc in plan_scenes(ep, s or settings())) / FPS
 
 
@@ -378,7 +397,11 @@ def build_props(ep, s, fmt, draft):
     vo = SCRIPTURE / ep["voiceover"] if ep.get("voiceover") else None
     music = SCRIPTURE / ep["music"] if ep.get("music") else None
     vo_seconds = duration(vo) if vo and has_audio(vo) else None
-    scenes = plan_scenes(ep, s, vo_seconds)
+    timing = voice.timing_for(ep) if vo else None  # AI voiceover: exact per-scene timing
+    scenes = timing["scenes"] if timing else plan_scenes(ep, s, vo_seconds)
+    skit = normalize_skit(ep.get("skit"))
+    # the character's mouth follows the voice during talking beats (AI voice or your own recording)
+    mouth = voice.mouth_track(vo, scenes, skit) if vo_seconds and any(b["talk"] for b in skit) else []
     # audio is served to the browser from remotion/public/jobs/<id>/
     pub = REMOTION / "public" / "jobs" / ep["id"]
     shutil.rmtree(pub, ignore_errors=True)
@@ -391,6 +414,9 @@ def build_props(ep, s, fmt, draft):
     w, h = (1080, 1920) if fmt == "vertical" else (1920, 1080)
     apply_frames = next(sc["frames"] for sc in scenes if sc["type"] == "apply")
     weights = [max(2.2, words(a) / float(s["words_per_second"]) + 0.9) for a in ep["apply"]]
+    apply_starts = [round((apply_frames - 0.8 * FPS) * sum(weights[:i]) / sum(weights)) for i in range(len(weights))]
+    if timing and len(timing.get("apply_starts") or []) == len(ep["apply"]):
+        apply_starts = [max(0, f - 14) for f in timing["apply_starts"]]  # each point appears as it's spoken
     return {
         "width": w, "height": h, "fps": FPS, "draft": bool(draft),
         "brand": {"series": s["series"], "handle": s["handle"], "background": s["background"],
@@ -398,11 +424,13 @@ def build_props(ep, s, fmt, draft):
         "hook": ep["hook"], "reference": ep.get("reference_display") or verse_text(ep["reference"])[0],
         "verse": ep["verse"], "reflection": ep["reflection"], "closing": ep.get("closing", ""),
         "apply": ep["apply"],
-        "applyStarts": [round((apply_frames - 0.8 * FPS) * sum(weights[:i]) / sum(weights)) for i in range(len(weights))],
+        "applyStarts": apply_starts,
+        "verseSpan": (timing or {}).get("verse_span") or [],
+        "mouth": mouth,
         "scenes": scenes,
         "voiceover": rel.get("voiceover", ""), "music": rel.get("music", ""),
         "musicVolume": float(s["music_volume"] if rel.get("voiceover") else s["music_volume_no_voice"]),
-        "skit": [{k: v for k, v in b.items() if k != "seconds"} for b in normalize_skit(ep.get("skit"))],
+        "skit": [{k: v for k, v in b.items() if k not in ("seconds", "say")} for b in skit],
         "character": s["character"], "flash": s["flash"],
     }
 
@@ -488,7 +516,7 @@ def cmd_check(args):
         state = "ok" if not problems else "PROBLEMS"
         secs = episode_seconds(ep) if not problems else 0
         print(f"{eid}: {state}{'' if ep.get('reviewed') else ' (not reviewed)'}" + (f", {secs:.0f}s" if secs else ""))
-        if secs > MAX_SHORT and not ep.get("voiceover"):
+        if secs > MAX_SHORT:
             print(f"   ! {secs:.0f}s is over {MAX_SHORT:.0f}s: shorten the reflection, an apply point or the skit")
         for p in problems:
             print(f"   - {p}")

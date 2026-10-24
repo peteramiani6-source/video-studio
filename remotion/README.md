@@ -8,7 +8,7 @@ remotion/
 │   ├── index.ts              entry point (registers the compositions)
 │   ├── Root.tsx              the composition list + sample props for the preview
 │   ├── character/
-│   │   ├── Character.tsx     the channel's character (SVG): poses, faces, blinking, breathing, talking
+│   │   ├── Character.tsx     the channel's character (SVG): poses, faces, blinking, breathing, lip sync
 │   │   ├── poses.ts          pose and face definitions (hand positions; arms bend on their own)
 │   │   └── CharacterSheet.tsx  every pose and face on one page, for checking changes
 │   └── scripture/
@@ -57,7 +57,8 @@ npx remotion still src/index.ts CharacterSheet sheet.png
 
 `scripts/scripture.py render <id>`:
 1. reads the episode file and re-checks the verse against the bundled KJV
-2. works out each scene's length from reading speed, or stretches the scenes to fit the voiceover
+2. works out each scene's length: from the AI voiceover's timing (`voice`), else reading speed, stretched to fit your own recording
+   (plus the mouth track for lip sync and the verse's spoken span)
 3. writes the props to `work/scripture-<id>/props_<format>.json` and copies the audio into `public/jobs/<id>/`
 4. runs `npx remotion render src/index.ts ScriptureEpisode … --props=…`
 5. normalises the loudness with FFmpeg and writes `out/scripture/<id>/`

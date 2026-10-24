@@ -38,6 +38,8 @@ export type EpisodeProps = {
   reflection: string;
   apply: string[]; // 1-3 "live it" points
   applyStarts: number[]; // frame (inside the apply scene) where each point appears
+  verseSpan?: number[]; // [start, end] frames (inside the verse scene) while the verse is read aloud; [] = default pacing
+  mouth?: number[]; // per video frame: 0 closed, 1 half, 2 open (lip sync during talking skit beats); [] = none
   closing: string; // question on the end card
   scenes: Scene[]; // hook, verse, reflection, apply, end, with lengths in frames
   voiceover: string; // path under public/, or ""

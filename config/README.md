@@ -12,6 +12,9 @@ Settings for every mode. Scripts read these on each run, so a change applies to 
 | `CLIP_COUNT`, `CLIP_MIN`, `CLIP_MAX` | `4`, `25`, `60` | clip mode: how many clips, and their length in seconds |
 | `SILENCE_CUT`, `SILENCE_MIN_GAP`, `SILENCE_MARGIN` | `1`, `0.8`, `0.2` | clip mode: cut pauses longer than the gap, keeping a margin |
 | `EVENT_SOCIAL_CLIPS`, `EVENT_CLIP_COUNT` | `1`, `5` | event mode: also make vertical clips |
+| `TTS` | `kokoro` | scripture voiceovers: `kokoro` (local on the CPU, free) or `none` (record your own) |
+| `TTS_NARRATOR`, `TTS_CHARACTER` | `am_michael`, `am_puck` | the two voices; list them with `scripts/scripture.sh voice --voices` |
+| `TTS_SPEED`, `TTS_VERSE_SPEED` | `1.0`, `0.9` | speaking speed; the verse is read a little slower |
 
 API keys never go here. They go in `.env` in the repo root (gitignored). See `.env.example`.
 

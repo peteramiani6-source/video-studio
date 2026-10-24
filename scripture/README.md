@@ -16,6 +16,7 @@ scripture/
 scripts/scripture.sh new "Philippians 4:6-7" --theme "anxiety at night"   # Claude drafts the words
 scripts/scripture.sh show ep004                                            # read it as a script
 # edit scripture/episodes/ep004.json until it's right, then set "reviewed": true
+scripts/scripture.sh voice ep004                      # AI voiceover (narrator + character), see Voiceover below
 scripts/scripture.sh render ep004                     # vertical by default
 scripts/scripture.sh render ep004 --format both       # vertical and wide (YouTube)
 scripts/scripture.sh render ep004 --draft             # quick half-size preview, allowed before review
@@ -38,7 +39,7 @@ Videos go to `out/scripture/<id>/`, together with `post.md` (caption, hashtags a
 | `closing` | Claude, then you | an end-card question that invites comments |
 | `caption`, `hashtags` | Claude, then you | for the post (goes to `post.md`) |
 | `format` | you | `vertical`, `wide` or `both` |
-| `voiceover` | you | e.g. `audio/ep004.mp3`. The video stretches to fit the voiceover's length |
+| `voiceover` | you, or `voice` | `audio/ep004_ai.wav` (set by `voice`), or your own recording, e.g. `audio/ep004.mp3` |
 | `music` | you | e.g. `music/calm-piano.mp3`. Plays quietly under the voice and fades out at the end |
 | `reviewed` | **you** | starts `false`. Set it to `true` only after reading the whole script |
 
@@ -68,6 +69,7 @@ A skit is a list of **beats**, shown in order with hard cuts (comic timing), in 
 | `pose` | `idle`, `talk`, `shrug`, `think`, `facepalm`, `panic`, `pray`, `laugh`, `wave`, `lying` (in bed) |
 | `face` | `neutral`, `deadpan`, `wide`, `worried`, `happy`, `peace`, `laugh` |
 | `caption` | big comic text at the top, ≤ 60 characters |
+| `say` | what the character says out loud in the voiceover (≤ 90 characters); empty = silent beat. A talking beat with no `say` speaks its caption |
 | `talk` | `true` makes the mouth move |
 | `thoughts` | up to 6 short words popping up around the head |
 | `seconds` | 0.6–6 per beat; the whole skit stays under 20 s |
@@ -88,9 +90,33 @@ The character is the channel's own design. Change its colours under `scripture.c
 
 `data/kjv.json.gz` is the King James Version (1769 text, 66 books, 31,102 verses). It's in the public domain almost everywhere. In the UK it's under Crown patent, which allows quotation like this. Most modern translations (NIV, ESV and others) are copyrighted and limit how much you can quote, so they aren't bundled. For other Church texts, check the publisher's terms before building a channel on them.
 
-## Voiceover and music
+## Voiceover
 
-- Record each episode in one take: hook, verse, reflection, the points, the closing question. One session can cover a whole batch. Save the files as `audio/<id>.mp3` and set `"voiceover"` in each episode.
+**AI voice (free, on your computer):**
+
+```bash
+scripts/scripture.sh voice ep004            # writes audio/ep004_ai.wav and sets it as the voiceover
+scripts/scripture.sh render ep004 --draft
+scripts/scripture.sh voice --voices         # list voices; pick them in config/models.env (TTS_NARRATOR, TTS_CHARACTER)
+```
+
+- Two voices: the **character** speaks the skit lines (`say`), the **narrator** reads the hook, the reference and verse, the reflection, the points and the closing question.
+- Each scene lasts as long as its line, so the verse appears word by word while it is read, each "live it" point appears as it's spoken, and the character's mouth follows the voice.
+- Engine: [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) (Apache 2.0), about 1.5 s of CPU per second of speech. `setup.sh` downloads it (~120 MB into `models/kokoro/`). After that it works offline.
+- The verse is read exactly as the KJV has it. Only the reference is said in words ("Philippians chapter 4, verses 6 to 7").
+- Change any words (or the skit timing or voices) and `check`/`render` say the voiceover is out of date. Run `voice` again; unchanged lines come from a cache, so it's quick.
+- The voices are American or British English. For a Kenyan or East African sound, your own voice (below) will connect better. The AI voice is good for drafts and for testing timing.
+
+**Your own voice:**
+
+```bash
+scripts/scripture.sh voice ep004 --script   # prints every line in order: CHARACTER / NARRATOR
+```
+
+Record it in one take, save as `audio/ep004.mp3` and set `"voiceover": "audio/ep004.mp3"`. The scenes stretch to fit your recording, and the character's mouth follows your voice during talking beats. One session can cover a whole batch.
+
+## Music
+
 - Use only music you have the rights to: YouTube Audio Library, Pixabay Music, or a licensed library.
 - Without a voiceover, scene lengths come from reading speed (`words_per_second` in `brand.json`).
 

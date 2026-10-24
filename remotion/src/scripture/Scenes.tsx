@@ -72,13 +72,20 @@ export const HookScene: React.FC<{text: string; brand: Brand}> = ({text, brand})
   );
 };
 
-export const VerseScene: React.FC<{reference: string; verse: string; brand: Brand}> = ({reference, verse, brand}) => {
+export const VerseScene: React.FC<{reference: string; verse: string; brand: Brand; span?: number[]}> = ({reference, verse, brand, span}) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
   const k = useScale();
   const words = verse.split(/\s+/);
   // all words are in by 70% of the scene; the rest is a hold so the verse can be read in full
   const step = Math.max(1, (durationInFrames * 0.7 - 20) / words.length);
+  // with a voiceover, each word appears as it is read (spread by length across the spoken span)
+  const chars = words.map((w) => w.length + 1);
+  const total = chars.reduce((a, b) => a + b, 0);
+  const wordStart = (i: number) =>
+    span && span.length === 2
+      ? span[0] - 4 + ((span[1] - span[0]) * chars.slice(0, i).reduce((a, b) => a + b, 0)) / total
+      : 12 + i * step;
   const size = Math.max(56, Math.min(96, 112 - verse.length * 0.24)) * k;
   const lineW = interpolate(frame, [0, 24], [0, 140 * k], {extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic)});
   return (
@@ -92,7 +99,7 @@ export const VerseScene: React.FC<{reference: string; verse: string; brand: Bran
         color: brand.text, textAlign: 'center', textShadow: '0 3px 18px rgba(0,0,0,0.5)'}}>
         <span style={{color: brand.accent}}>&ldquo;</span>
         {words.map((w, i) => {
-          const t = interpolate(frame, [12 + i * step, 12 + i * step + 12], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
+          const t = interpolate(frame, [wordStart(i), wordStart(i) + 12], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
           const last = i === words.length - 1;
           return (
             <span key={i} style={{opacity: t, display: 'inline-block', marginRight: last ? 0 : '0.25em',

@@ -9,7 +9,7 @@ The pipeline. Each mode has one **entry script** (`.sh`) that runs the health ch
 | `event.sh <file-or-folder> [title] [subtitle]` / `--resume <job>` | Event | merge → transcribe → plan_event → render_event → render (social clips) |
 | `montage.sh <file-or-folder> [brief]` / `--resume <job>` | Montage | merge → transcribe (speech optional) → shots → plan_shots → render_shots |
 | `run.sh <file> [job]` | Clip | prepare → transcribe → pick_clips → render |
-| `scripture.sh new / show / check / render` | Scripture | scripture.py (+ Remotion) |
+| `scripture.sh new / show / check / voice / render` | Scripture | scripture.py, voice.py (+ Remotion) |
 | `watch.sh` | Clip, automatic | watches `inbox/`, runs `run.sh` per new video; Claude Code steps in if a step fails |
 
 ## Steps
@@ -27,6 +27,7 @@ The pipeline. Each mode has one **entry script** (`.sh`) that runs the health ch
 | `plan_shots.py` | the model *looks at the sheets* and orders the shots | `edit.json` |
 | `render_shots.py` | renders the shot list: crop follows the subject, look, captions, hook | `montage.mp4`, `montage.md` |
 | `scripture.py` | scripture episodes: KJV lookup, drafting, review gate, Remotion render | `scripture/episodes/*.json`, `out/scripture/<id>/` |
+| `voice.py` | AI voiceover (Kokoro, local): narrator + character, scene timing, lip sync; `--script` for your own recording | `scripture/audio/<id>_ai.wav` + `.json` |
 
 ## Shared modules
 
@@ -36,7 +37,7 @@ The pipeline. Each mode has one **entry script** (`.sh`) that runs the health ch
 | `llm.py` | the only place that talks to a model: `ask(prompt, images)`, `ask_json(...)` with validation and one retry |
 | `look.py` | colour, stabilization and wind filter from `brand.json` → `look` |
 | `lock.sh` | one heavy job at a time (`flock`) |
-| `doctor.py` | the health check: `--mode video` (default), `scripture`, `scripture-write` |
+| `doctor.py` | the health check: `--mode video` (default), `scripture`, `scripture-write`, `scripture-voice` |
 
 ## Conventions
 

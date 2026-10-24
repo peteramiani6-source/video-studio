@@ -28,7 +28,7 @@ export const POSES = {
 export type PoseName = keyof typeof POSES;
 
 export type Eyes = 'dot' | 'wide' | 'closed' | 'deadpan' | 'happy' | 'worried';
-export type Mouth = 'line' | 'open' | 'smile' | 'o' | 'flat' | 'wavy' | 'grin';
+export type Mouth = 'line' | 'open' | 'half' | 'smile' | 'o' | 'flat' | 'wavy' | 'grin';
 
 export const FACES = {
   neutral: {eyes: 'dot', mouth: 'line'},

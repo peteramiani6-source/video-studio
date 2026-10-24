@@ -11,6 +11,7 @@
       "pose": "lying",
       "face": "wide",
       "caption": "2:47 AM",
+      "say": "",
       "talk": false,
       "thoughts": [],
       "seconds": 2.0
@@ -21,6 +22,7 @@
       "pose": "talk",
       "face": "worried",
       "caption": "What if I fail the exam...",
+      "say": "",
       "talk": true,
       "thoughts": [],
       "seconds": 2.4
@@ -31,6 +33,7 @@
       "pose": "think",
       "face": "worried",
       "caption": "...and rent is due Friday...",
+      "say": "",
       "talk": true,
       "thoughts": [],
       "seconds": 2.2
@@ -41,7 +44,8 @@
       "pose": "panic",
       "face": "wide",
       "caption": "AND MY WHOLE FUTURE?!",
-      "talk": false,
+      "say": "And my whole future?!",
+      "talk": true,
       "thoughts": [
         "exam",
         "rent",
@@ -58,7 +62,8 @@
       "pose": "idle",
       "face": "deadpan",
       "caption": "...okay. Wait.",
-      "talk": false,
+      "say": "...okay. Wait.",
+      "talk": true,
       "thoughts": [],
       "seconds": 1.8
     }

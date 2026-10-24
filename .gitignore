@@ -16,3 +16,4 @@ scripture/audio/*
 scripture/music/*
 !scripture/music/README.md
 !inbox/README.md
+models/
