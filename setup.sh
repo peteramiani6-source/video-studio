@@ -13,7 +13,9 @@ miss() { printf '  \033[33mmiss\033[0m %s\n' "$1"; }
 
 echo "Checking tools:"
 command -v ffmpeg >/dev/null && ok ffmpeg || miss "ffmpeg (apt install ffmpeg / brew install ffmpeg)"
-ffmpeg -hide_banner -filters 2>/dev/null | grep -q " subtitles " && ok "ffmpeg libass (captions)" \
+# Capture first: piping into `grep -q` under pipefail reports a false "missing" when grep exits early
+filters="$(ffmpeg -hide_banner -filters 2>/dev/null || true)"
+grep -q " subtitles " <<<"$filters" && ok "ffmpeg libass (captions)" \
   || miss "ffmpeg built without libass, captions will fail"
 command -v claude >/dev/null && ok "claude (Claude Code)" || miss "claude: npm install -g @anthropic-ai/claude-code"
 if command -v inotifywait >/dev/null || command -v fswatch >/dev/null; then ok "file watcher"
