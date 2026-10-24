@@ -1,6 +1,7 @@
 import React from 'react';
 import {AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import {hexA} from './Background';
+import {Character, CharacterColors} from '../character/Character';
 import {SANS, SERIF} from './fonts';
 import {Brand} from './types';
 
@@ -169,12 +170,17 @@ export const ApplyScene: React.FC<{items: string[]; starts: number[]; brand: Bra
   );
 };
 
-export const EndScene: React.FC<{closing: string; brand: Brand}> = ({closing, brand}) => {
+export const EndScene: React.FC<{closing: string; brand: Brand; character?: CharacterColors}> = ({closing, brand, character}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const k = useScale();
   return (
     <Safe>
+      {character ? (
+        <div style={{width: 220 * k, height: 330 * k, marginBottom: 30 * k, ...rise(frame, 0, fps)}}>
+          <Character pose="wave" face="happy" colors={character} />
+        </div>
+      ) : null}
       {closing ? (
         <div style={{...rise(frame, 0, fps), fontFamily: SANS, fontWeight: 600, fontSize: 54 * k, lineHeight: 1.3,
           color: brand.text, textAlign: 'center', marginBottom: 60 * k}}>

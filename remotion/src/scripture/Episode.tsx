@@ -3,12 +3,17 @@ import {AbsoluteFill, Audio, interpolate, Series, staticFile, useCurrentFrame, u
 import {Background} from './Background';
 import {loadFonts, SANS} from './fonts';
 import {ApplyScene, EndScene, HookScene, ReflectionScene, SceneFade, VerseScene} from './Scenes';
+import {SkitScene} from './Skit';
 import {EpisodeProps, Scene} from './types';
 
 loadFonts();
 
 const sceneBody = (scene: Scene, p: EpisodeProps) => {
   switch (scene.type) {
+    case 'skit': {
+      const i = scene.index ?? 0;
+      return <SkitScene beat={p.skit[i]} prev={p.skit[i - 1]} colors={p.character} flash={p.flash} seed={i} />;
+    }
     case 'hook':
       return <HookScene text={p.hook} brand={p.brand} />;
     case 'verse':
@@ -18,7 +23,7 @@ const sceneBody = (scene: Scene, p: EpisodeProps) => {
     case 'apply':
       return <ApplyScene items={p.apply} starts={p.applyStarts} brand={p.brand} />;
     case 'end':
-      return <EndScene closing={p.closing} brand={p.brand} />;
+      return <EndScene closing={p.closing} brand={p.brand} character={p.skit.length ? p.character : undefined} />;
   }
 };
 
@@ -50,7 +55,7 @@ export const ScriptureEpisode: React.FC<EpisodeProps> = (p) => {
       <Series>
         {p.scenes.map((scene, i) => (
           <Series.Sequence key={i} durationInFrames={scene.frames} name={scene.type}>
-            <SceneFade>{sceneBody(scene, p)}</SceneFade>
+            {scene.type === 'skit' ? sceneBody(scene, p) : <SceneFade>{sceneBody(scene, p)}</SceneFade>}
           </Series.Sequence>
         ))}
       </Series>

@@ -31,7 +31,8 @@ Videos go to `out/scripture/<id>/`, together with `post.md` (caption, hashtags a
 |---|---|---|
 | `reference` | you | "Proverbs 3:5-6", "1 Cor 13:4-7", "Ps 23". Up to 8 verses, within one chapter |
 | `reference_display`, `verse` | the tool | the exact KJV text. **Never edit by hand.** `check` and `render` refuse a verse that doesn't match the KJV. `check --fix` restores it |
-| `hook` | Claude, then you | the opening line on screen (≤ 70 characters) |
+| `hook` | Claude, then you | the opening line on screen (≤ 70 characters). Not shown when there's a skit |
+| `skit` | Claude (`new --skit`), then you | optional comic opening, see Skits below |
 | `reflection` | Claude, then you | what it means today (≤ 420 characters) |
 | `apply` | Claude, then you | 1–3 "live it this week" points (≤ 90 characters each) |
 | `closing` | Claude, then you | an end-card question that invites comments |
@@ -40,6 +41,42 @@ Videos go to `out/scripture/<id>/`, together with `post.md` (caption, hashtags a
 | `voiceover` | you | e.g. `audio/ep004.mp3`. The video stretches to fit the voiceover's length |
 | `music` | you | e.g. `music/calm-piano.mp3`. Plays quietly under the voice and fades out at the end |
 | `reviewed` | **you** | starts `false`. Set it to `true` only after reading the whole script |
+
+## Skits: a comic opening with the character
+
+An episode can open with a short skit: the channel's cartoon character acting out the everyday situation the verse speaks to, before the verse lands. See `ep004.json` (overthinking at 2:47 AM, then Philippians 4:6–7).
+
+```bash
+scripts/scripture.sh new "Galatians 6:9" --theme "procrastinating" --skit   # Claude drafts the skit too
+```
+
+A skit is a list of **beats**, shown in order with hard cuts (comic timing), in place of the hook:
+
+```json
+"skit": [
+  {"shot": "wide", "bg": "#1D2540", "pose": "lying", "face": "wide", "caption": "2:47 AM", "seconds": 2.0},
+  {"shot": "closeup", "bg": "#FFFFFF", "pose": "talk", "face": "worried", "caption": "What if I fail the exam...", "talk": true, "seconds": 2.4},
+  {"shot": "wide", "bg": "flash", "pose": "panic", "face": "wide", "caption": "AND MY WHOLE FUTURE?!", "thoughts": ["exam", "rent", "fees"], "seconds": 2.6},
+  {"shot": "wide", "bg": "#FFFFFF", "pose": "idle", "face": "deadpan", "caption": "...okay. Wait.", "seconds": 1.8}
+]
+```
+
+| Field | Options |
+|---|---|
+| `shot` | `wide` (full body) or `closeup` (face fills the frame) |
+| `bg` | any colour (`"#FFFFFF"`), or `"flash"` to cycle the flash colours for a chaotic moment |
+| `pose` | `idle`, `talk`, `shrug`, `think`, `facepalm`, `panic`, `pray`, `laugh`, `wave`, `lying` (in bed) |
+| `face` | `neutral`, `deadpan`, `wide`, `worried`, `happy`, `peace`, `laugh` |
+| `caption` | big comic text at the top, ≤ 60 characters |
+| `talk` | `true` makes the mouth move |
+| `thoughts` | up to 6 short words popping up around the head |
+| `seconds` | 0.6–6 per beat; the whole skit stays under 20 s |
+
+**Tone rule (Claude follows it, you check it in review):** the joke is about us (overthinking, procrastinating, 2 AM worries), never about God, the scriptures or anything sacred, and never mocking anyone. End the skit on a quiet "wait…" beat so the verse lands as the answer.
+
+The character is the channel's own design. Change its colours under `scripture.character` in `config/brand.json`. To see every pose and face: `cd remotion && npx remotion still src/index.ts CharacterSheet sheet.png`.
+
+`check` and `render` warn when an episode runs past 60 seconds, the sweet spot for Reels and Shorts. Shorten the reflection, an apply point or the skit.
 
 ## Rules this mode follows
 

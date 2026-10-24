@@ -25,7 +25,7 @@ API keys never go here. They go in `.env` in the repo root (gitignored). See `.e
 | `montage` | montage | `format` (`vertical`/`wide`), target `seconds`, `min_shot`/`max_shot`, `gear_max`, `scene_threshold` |
 | `video` | clip, montage | encoder quality (`crf`, `preset`), audio bitrate, loudness normalisation |
 | `event` | event | title/end card colours and text, fonts, lower-third timing, fades, loudness |
-| `scripture` | scripture | channel brand and voice: `series`, `handle`, `audience`, `tone`, `faith_context`, `background` (two colours), `accent`, `text`, `words_per_second`, music volumes |
+| `scripture` | scripture | channel brand and voice: `series`, `handle`, `audience`, `tone`, `faith_context`, `background` (two colours), `accent`, `text`, `words_per_second`, music volumes, `character` (skin, hoodie, line, pants colours), `flash` (colours for flash beats in skits) |
 
 Colours are hex (`"#E8B04B"`). Ask Claude Code to change them for you ("make the scripture accent green"), or edit them directly.
 

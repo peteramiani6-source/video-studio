@@ -1,13 +1,15 @@
 import {continueRender, delayRender, staticFile} from 'remotion';
 
-// Fonts are bundled in public/fonts (SIL Open Font License), so renders never depend on a font CDN.
+// Fonts are bundled in public/fonts (SIL Open Font License; Comic Neue for skit captions), so renders never depend on a font CDN.
 export const SERIF = 'Cormorant Garamond';
 export const SANS = 'Inter';
+export const COMIC = 'Comic Neue';
 
 const faces: Array<[string, string, FontFaceDescriptors]> = [
   [SERIF, 'fonts/CormorantGaramond.ttf', {weight: '300 700', style: 'normal'}],
   [SERIF, 'fonts/CormorantGaramond-Italic.ttf', {weight: '300 700', style: 'italic'}],
   [SANS, 'fonts/Inter.ttf', {weight: '100 900', style: 'normal'}],
+  [COMIC, 'fonts/ComicNeue-Bold.ttf', {weight: '700', style: 'normal'}],
 ];
 
 let loading: Promise<void> | null = null;

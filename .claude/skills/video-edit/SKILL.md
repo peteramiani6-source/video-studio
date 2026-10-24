@@ -100,6 +100,8 @@ Requests you can handle by editing the episode, then re-rendering:
 - **"Use my voiceover":** set `"voiceover": "audio/<id>.mp3"`. The scenes stretch to fit it.
 - **"Add music":** set `"music": "music/<file>.mp3"`. Only use files the user put there.
 - **"Wide version for YouTube":** `--format wide` or `both`.
+- **"Add a skit" / "make it funnier":** add or edit the `skit` beats (fields and allowed poses and faces are in `scripture/README.md`). Keep the joke about everyday life, never about God or sacred things, and end on a quiet "wait…" beat before the verse. Then set `reviewed` back to false. Render a `--draft` and look at frames before saying it's done.
+- **"Too long":** `check` shows each episode's length. Keep it under 60 s by trimming the reflection, an apply point or skit beats.
 
 To change colours, series name or handle, edit `config/brand.json` → `scripture`. To change the animation or layout, edit `remotion/src/scripture/Scenes.tsx` (preview with `cd remotion && npm run studio`). Keep the vertical safe area: text must stay clear of the bottom fifth of the frame.
 

@@ -345,6 +345,50 @@ class Scripture(unittest.TestCase):
             self.assertEqual(scripture.next_id(), "ep008")
 
 
+class Skit(unittest.TestCase):
+    BEAT = {"shot": "wide", "bg": "#FFFFFF", "pose": "panic", "face": "wide", "caption": "AND THE RENT",
+            "talk": False, "thoughts": ["rent", "exam"], "seconds": 2.0}
+
+    def test_poses_and_faces_match_the_animation_code(self):
+        ts = (Path(__file__).resolve().parent.parent / "remotion/src/character/poses.ts").read_text()
+        import re
+        poses_block = ts[ts.index("export const POSES"):ts.index("satisfies Record<string, Pose>")]
+        faces_block = ts[ts.index("export const FACES"):ts.index("satisfies Record<string, {eyes")]
+        self.assertEqual(set(re.findall(r"^\s{2}(\w+):", poses_block, re.M)), set(scripture.POSES))
+        self.assertEqual(set(re.findall(r"^\s{2}(\w+):", faces_block, re.M)), set(scripture.FACES))
+
+    def test_valid_skit(self):
+        self.assertEqual(scripture.validate_skit([self.BEAT, dict(self.BEAT, bg="flash", shot="closeup")]), [])
+        self.assertEqual(scripture.validate_skit([]), [])
+        self.assertEqual(scripture.validate_skit(None), [])
+
+    def test_bad_skit(self):
+        bad = [dict(self.BEAT, pose="backflip"), dict(self.BEAT, face="angry"), dict(self.BEAT, bg="red"),
+               dict(self.BEAT, shot="drone"), dict(self.BEAT, caption="x" * 70), dict(self.BEAT, thoughts=["a"] * 7),
+               dict(self.BEAT, seconds=9)]
+        problems = " ".join(scripture.validate_skit(bad))
+        for word in ("backflip", "angry", "bg must", "shot must", "caption", "thoughts", "seconds must"):
+            self.assertIn(word, problems)
+        self.assertTrue(any("under 20s" in p for p in scripture.validate_skit([dict(self.BEAT, seconds=5.5)] * 4)))
+        self.assertTrue(any("8 or fewer" in p for p in scripture.validate_skit([dict(self.BEAT, seconds=1)] * 9)))
+        self.assertEqual(scripture.validate_skit("nope"), ['"skit" must be a list of beats'])
+
+    def test_skit_replaces_the_hook_scene(self):
+        ep = dict(Scripture.EP, skit=[self.BEAT, dict(self.BEAT, seconds=1.5)])
+        scripture.validate_episode(ep, fix_verse=True)
+        scenes = scripture.plan_scenes(ep, scripture.settings())
+        self.assertEqual([x["type"] for x in scenes], ["skit", "skit", "verse", "reflection", "apply", "end"])
+        self.assertEqual([x.get("index") for x in scenes[:2]], [0, 1])
+        self.assertEqual(scenes[0]["frames"], 60)
+        self.assertEqual(scenes[1]["frames"], 45)
+        self.assertLess(scripture.episode_seconds(ep), 60)
+
+    def test_normalize_fills_defaults(self):
+        n = scripture.normalize_skit([{"pose": "wave"}])[0]
+        self.assertEqual((n["shot"], n["bg"], n["face"], n["talk"], n["thoughts"], n["seconds"]),
+                         ("wide", "#FFFFFF", "neutral", False, [], 2.0))
+
+
 class LlmSubscriptionEnv(unittest.TestCase):
     def test_claude_code_picker_never_passes_the_api_key(self):
         seen = {}
