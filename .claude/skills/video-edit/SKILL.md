@@ -87,6 +87,7 @@ To change the cut, look at the contact sheets with the Read tool, edit `edit.jso
 scripts/scripture.sh new "Proverbs 3:5-6" --theme "decisions after school"   # drafts scripture/episodes/epNNN.json
 scripts/scripture.sh show <id>                                                # the script, readable
 scripts/scripture.sh check [<id>]                                             # validate (verse matches KJV, lengths, files)
+scripts/scripture.sh voice <id> [--script]                                    # AI voiceover, or lines to record
 scripts/scripture.sh render <id> [--draft] [--format vertical|wide|both]
 scripts/scripture.sh render --all [--draft] [--force]
 ```
@@ -97,7 +98,9 @@ scripts/scripture.sh render --all [--draft] [--force]
 
 Requests you can handle by editing the episode, then re-rendering:
 - **"Make the hook punchier":** rewrite `hook` (≤ 70 characters), then show the script. Changing the words means the user has to review it again, so set `reviewed` back to false and say so.
-- **"Use my voiceover":** set `"voiceover": "audio/<id>.mp3"`. The scenes stretch to fit it.
+- **"Add a voiceover" / "make it talk":** run `scripts/scripture.sh voice <id>`, then render a `--draft`. Give silent skit beats a `say` line if the character should speak there. Voices are `TTS_NARRATOR` / `TTS_CHARACTER` in `config/models.env`.
+- **"Use my voiceover":** run `voice <id> --script` for the lines to read, then set `"voiceover": "audio/<id>.mp3"`. The scenes stretch to fit it and the mouth follows it.
+- **"Voiceover is out of date":** the words changed after `voice` ran. Run `voice <id>` again.
 - **"Add music":** set `"music": "music/<file>.mp3"`. Only use files the user put there.
 - **"Wide version for YouTube":** `--format wide` or `both`.
 - **"Add a skit" / "make it funnier":** add or edit the `skit` beats (fields and allowed poses and faces are in `scripture/README.md`). Keep the joke about everyday life, never about God or sacred things, and end on a quiet "wait…" beat before the verse. Then set `reviewed` back to false. Render a `--draft` and look at frames before saying it's done.

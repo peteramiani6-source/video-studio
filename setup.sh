@@ -34,6 +34,17 @@ else
   miss "Node.js/npm: needed only for scripture mode (sudo apt install nodejs npm)"
 fi
 
+echo "Voice (Kokoro, for scripture voiceovers):"
+mkdir -p models/kokoro
+for f in kokoro-v1.0.int8.onnx voices-v1.0.bin; do
+  if [ ! -s "models/kokoro/$f" ]; then
+    curl -fsSL -o "models/kokoro/$f.part" \
+      "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$f" \
+      && mv "models/kokoro/$f.part" "models/kokoro/$f" || { rm -f "models/kokoro/$f.part"; miss "download of $f failed; re-run setup.sh"; }
+  fi
+done
+[ -s models/kokoro/voices-v1.0.bin ] && [ -s models/kokoro/kokoro-v1.0.int8.onnx ] && ok "Kokoro voice model in models/kokoro/"
+
 echo "Checking the configured models (config/models.env):"
 .venv/bin/python scripts/doctor.py || echo "  fix the FAIL lines above, then run: .venv/bin/python scripts/doctor.py"
 

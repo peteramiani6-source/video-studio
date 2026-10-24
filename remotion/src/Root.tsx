@@ -32,6 +32,8 @@ const sample: EpisodeProps = {
   music: '',
   musicVolume: 0.45,
   skit: [],
+  verseSpan: [],
+  mouth: [],
   character: {skin: '#A86B45', hoodie: '#E8B04B', line: '#1B1B1B', pants: '#2B3A55'},
   flash: ['#2B3A55', '#E76F51', '#8AB6A8', '#E8B04B'],
 };

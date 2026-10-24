@@ -1,9 +1,10 @@
 """Preflight: check that the tools and models chosen in config/models.env are actually usable.
 
-Usage: python3 scripts/doctor.py [--quiet] [--mode video|scripture|scripture-write]
+Usage: python3 scripts/doctor.py [--quiet] [--mode video|scripture|scripture-write|scripture-voice]
   video (default): everything the clip, event and montage modes need
   scripture: ffmpeg + Node + the Remotion project (no transcription, no model)
   scripture-write: only the model (PICKER) used to draft episodes
+  scripture-voice: ffmpeg + the speech engine (TTS) and its model files
 Run by setup.sh, run.sh and event.sh before any work starts, so a missing login, key or
 library fails in seconds with a clear fix instead of halfway through a long job.
 --quiet prints only problems. Exit code 1 if anything required is missing.
@@ -79,6 +80,9 @@ def main():
     if mode == "scripture":
         check_remotion()
         return report(quiet)
+    if mode == "scripture-voice":
+        check_tts()
+        return report(quiet)
 
     # Transcription
     stt = env("STT", "local")
@@ -93,6 +97,19 @@ def main():
 
     check_picker()
     return report(quiet)
+
+
+def check_tts():
+    tts = env("TTS", "kokoro")
+    if tts == "kokoro":
+        need(has_module("kokoro_onnx") and has_module("soundfile"), "TTS=kokoro (kokoro-onnx)", "run ./setup.sh")
+        files = ("kokoro-v1.0.int8.onnx", "voices-v1.0.bin")
+        need(all((ROOT / "models" / "kokoro" / f).exists() for f in files), "Kokoro voice model (models/kokoro/)",
+             "run ./setup.sh (downloads ~120 MB)")
+    elif tts == "none":
+        problems.append("TTS=none: set TTS=kokoro in config/models.env, or record your own voiceover (voice <id> --script)")
+    else:
+        problems.append(f"TTS={tts}: use kokoro or none")
 
 
 def check_picker():

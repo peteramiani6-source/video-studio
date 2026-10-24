@@ -15,12 +15,13 @@ const isDark = (hex: string) => {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.45;
 };
 
-export const SkitScene: React.FC<{beat: Beat; prev?: Beat; colors: CharacterColors; flash: string[]; seed: number}> = ({
+export const SkitScene: React.FC<{beat: Beat; prev?: Beat; colors: CharacterColors; flash: string[]; seed: number; mouth?: number[]}> = ({
   beat,
   prev,
   colors,
   flash,
   seed,
+  mouth,
 }) => {
   const frame = useCurrentFrame();
   const {width, height, fps, durationInFrames} = useVideoConfig();
@@ -47,6 +48,7 @@ export const SkitScene: React.FC<{beat: Beat; prev?: Beat; colors: CharacterColo
       transition={sameShot ? transition : 1}
       face={beat.face as FaceName}
       talking={beat.talk}
+      mouthLevels={mouth}
       colors={colors}
       blinkSeed={seed}
     />

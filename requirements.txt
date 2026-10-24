@@ -3,3 +3,6 @@ av<19                 # PyAV 19 dropped av.open(metadata_errors=), which faster-
 anthropic>=0.40
 google-genai>=1.0
 requests>=2.31
+kokoro-onnx>=0.4         # scripture voiceovers (local, CPU); model files: setup.sh downloads them
+soundfile>=0.12
+numpy>=1.24

@@ -21,6 +21,11 @@ from plan_shots import heuristic_edit, quality_warnings, validate_edit  # noqa: 
 from render_shots import frame_filter  # noqa: E402
 from shots import cut_times, mean_in, parse_metadata, split_shots  # noqa: E402
 import scripture  # noqa: E402
+import voice  # noqa: E402
+try:
+    import numpy as np  # noqa: E402
+except ImportError:
+    np = None
 
 
 class ExtractJson(unittest.TestCase):
@@ -387,6 +392,81 @@ class Skit(unittest.TestCase):
         n = scripture.normalize_skit([{"pose": "wave"}])[0]
         self.assertEqual((n["shot"], n["bg"], n["face"], n["talk"], n["thoughts"], n["seconds"]),
                          ("wide", "#FFFFFF", "neutral", False, [], 2.0))
+
+
+class Voice(unittest.TestCase):
+    def ep(self):
+        ep = dict(Scripture.EP, skit=[dict(Skit.BEAT, talk=True, caption="WHAT IF I FAIL"),
+                                      dict(Skit.BEAT, say="", seconds=1.5)])
+        scripture.validate_episode(ep, fix_verse=True)
+        return ep
+
+    def test_spoken_reference(self):
+        self.assertEqual(voice.spoken_reference("Philippians 4:6–7"), "Philippians chapter 4, verses 6 to 7")
+        self.assertEqual(voice.spoken_reference("1 Corinthians 13:4"), "First Corinthians chapter 13, verse 4")
+        self.assertEqual(voice.spoken_reference("Psalms 23"), "Psalm 23")
+
+    def test_say_text(self):
+        self.assertEqual(voice.say_text({"caption": "AND MY FUTURE?!", "talk": True}), "And my future?!")
+        self.assertEqual(voice.say_text({"caption": "2:47 AM", "talk": False}), "")
+        self.assertEqual(voice.say_text({"caption": "x", "say": "Okay. Wait."}), "Okay. Wait.")
+
+    def test_say_makes_the_beat_talk(self):
+        self.assertTrue(scripture.normalize_skit([{"say": "hi"}])[0]["talk"])
+        self.assertIn("say is over", " ".join(scripture.validate_skit([dict(Skit.BEAT, say="x" * 91)])))
+
+    def test_verse_is_spoken_exactly(self):
+        ep = self.ep()
+        verse_lines = [ln for ln in voice.lines(ep, voice.tts_settings()) if ln.get("part") == "verse"]
+        self.assertEqual([ln["text"] for ln in verse_lines], [ep["verse"]])
+
+    def test_layout_follows_speech(self):
+        ep = self.ep()
+        ls = voice.lines(ep, voice.tts_settings())
+        clips = [0.0 if not ln["text"] else 2.0 for ln in ls]
+        scenes, starts, extra = voice.layout(ep, clips)
+        self.assertEqual([x["type"] for x in scenes], ["skit", "skit", "verse", "reflection", "apply", "end"])
+        self.assertEqual(scenes[0]["frames"], round((0.15 + 2.0 + 0.3) * 30))  # talking beat stretched to its line
+        self.assertEqual(scenes[1]["frames"], 45)                              # silent beat keeps its length
+        self.assertIsNone(starts[1])
+        self.assertEqual(len(extra["apply_starts"]), len(ep["apply"]))
+        a, b = extra["verse_span"]
+        self.assertEqual(b - a, 60)
+        # every line starts inside its own scene
+        bounds, t = {}, 0
+        for sc in scenes:
+            bounds[(sc["type"], sc.get("index"))] = (t, t + sc["frames"])
+            t += sc["frames"]
+        for ln, st in zip(ls, starts):
+            if st is not None:
+                lo, hi = bounds[(ln["scene"], ln.get("index"))]
+                self.assertTrue(lo <= st < hi)
+
+    def test_stale_voiceover_is_refused(self):
+        ep = self.ep()
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(voice, "SCRIPTURE", Path(d)), \
+                mock.patch.object(scripture, "SCRIPTURE", Path(d)):
+            (Path(d) / "audio").mkdir()
+            (Path(d) / "audio/x_ai.wav").write_bytes(b"")
+            (Path(d) / "audio/x_ai.json").write_text('{"fingerprint": "%s", "scenes": [], "seconds": 1}' % voice.fingerprint(ep))
+            ep["voiceover"] = "audio/x_ai.wav"
+            self.assertIsNotNone(voice.timing_for(ep))
+            ep["reflection"] = "Changed words."
+            self.assertTrue(any("out of date" in p for p in scripture.validate_episode(ep)))
+
+    def test_own_recording_has_no_timing(self):
+        ep = dict(self.ep(), voiceover="audio/mine.mp3")
+        self.assertIsNone(voice.timing_for(ep))
+
+    @unittest.skipIf(np is None, "numpy not installed")
+    def test_mouth_levels(self):
+        sr = 16000
+        t = np.arange(sr) / sr
+        loud = (0.5 * np.sin(2 * np.pi * 200 * t)).astype(np.float32)
+        x = np.concatenate([np.zeros(sr, np.float32), loud])
+        lv = voice.mouth_levels(x, sr, 60)
+        self.assertEqual(set(lv[:28]), {0})
+        self.assertEqual(set(lv[32:58]), {2})
 
 
 class LlmSubscriptionEnv(unittest.TestCase):
