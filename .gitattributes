@@ -1,0 +1,5 @@
+# Shell scripts must keep LF endings to run under Linux/WSL
+* text=auto eol=lf
+*.png binary
+*.mp3 binary
+*.mp4 binary

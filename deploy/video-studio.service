@@ -1,0 +1,29 @@
+# systemd user service: keeps the inbox watcher running and restarts it after reboots.
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/video-studio.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now video-studio
+#   loginctl enable-linger "$USER"     # keep running when you're logged out
+#
+# Logs:   journalctl --user -u video-studio -f   (and logs/pipeline.log)
+#
+# Adjust WorkingDirectory if the repo isn't at ~/video-studio, and PATH so `claude` is found
+# (run `which claude` to see where it lives, e.g. ~/.npm-global/bin or an nvm path).
+
+[Unit]
+Description=Video Studio inbox watcher
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/video-studio
+ExecStart=%h/video-studio/scripts/watch.sh
+Environment=MODE=auto
+Environment=PATH=%h/.local/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

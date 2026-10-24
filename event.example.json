@@ -1,0 +1,8 @@
+{
+  "title": "YSA Fireside Evening",
+  "subtitle": "Langata Ward | 14 November 2026",
+  "speakers": ["First Speaker", "Second Speaker"],
+  "notes": "Keep the opening hymn and the choir number. Skip the announcements at the end.",
+  "must_keep": [["00:42:10", "00:47:30"]],
+  "target_minutes": null
+}

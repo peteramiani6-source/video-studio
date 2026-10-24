@@ -1,0 +1,142 @@
+"""Event step 3: the edit decision list -> work/<job>/plan.json (+ clips.json for vertical clips)
+
+Usage: python3 scripts/plan_event.py <job-id> [--title "..."] [--subtitle "..."]
+
+The model reads the timestamped transcript and decides what stays, what each section is called,
+who is speaking (for lower-thirds), the highlight moments and the social clips.
+plan.json is plain JSON: review or edit it (or ask Claude Code to), then re-run render_event.py.
+"""
+import json
+import sys
+
+from common import duration, env, job_dir, log, parse_srt
+from llm import ask, extract_json
+from pick_clips import snap
+
+PROMPT = """You are editing a recorded event into a finished video.
+
+Event: {title}
+Details: {subtitle}
+Known speakers (use these spellings): {speakers}
+Notes from the organiser: {notes}
+Recording length: {total:.0f} seconds. {target}
+
+Below is the transcript with timestamps in seconds. Lines marked (no speech ...) are gaps: they may be
+music, singing, a performance, applause or just waiting. Keep a gap only if it sits inside a kept section
+or the notes say it matters.
+
+Decide:
+1. "segments": the parts to KEEP, in time order. Cut setup, mic checks, long waits, housekeeping
+   announcements and dead air. Keep every speech, talk, testimony, performance and key moment complete,
+   starting at the first word and ending after the last sentence. Give each a short "label" (used as a
+   chapter title), and "speaker" + "role" when one person is presenting (empty strings otherwise).
+2. "highlights": 6-10 moments of 5-20 seconds each for a 60-120 second highlight reel. Pick strong lines,
+   applause, laughter and emotional beats.
+3. "social_clips": {clips} self-contained moments of {lo}-{hi} seconds for Reels/TikTok, each with a
+   "title", "hook" (max 8 words), "caption" (1-2 sentences) and "hashtags" (3-5).
+4. "youtube": a "title" and a "description" (3-5 sentences).
+
+Return ONLY one JSON object:
+{{"segments": [{{"start": 0, "end": 0, "label": "", "speaker": "", "role": ""}}],
+  "highlights": [{{"start": 0, "end": 0}}],
+  "social_clips": [{{"start": 0, "end": 0, "title": "", "hook": "", "caption": "", "hashtags": []}}],
+  "youtube": {{"title": "", "description": ""}}}}
+
+Transcript:
+{transcript}"""
+
+
+def to_sec(v):
+    """Accepts 95, "95", "1:35" or "01:01:35"."""
+    if isinstance(v, (int, float)):
+        return float(v)
+    sec = 0.0
+    for part in str(v).replace(",", ".").split(":"):
+        sec = sec * 60 + float(part)
+    return sec
+
+
+def transcript_with_gaps(segs, total):
+    lines, prev = [], 0.0
+    for s in segs:
+        if s["start"] - prev > 20:
+            lines.append(f"[{prev:.0f}-{s['start']:.0f}] (no speech for {s['start'] - prev:.0f}s)")
+        lines.append(f"[{s['start']:.1f}-{s['end']:.1f}] {s['text']}")
+        prev = s["end"]
+    if total - prev > 20:
+        lines.append(f"[{prev:.0f}-{total:.0f}] (no speech for {total - prev:.0f}s)")
+    return "\n".join(lines)
+
+
+def clean_ranges(items, total, min_len, pad=0.4):
+    out = []
+    for it in sorted(items, key=lambda x: float(x["start"])):
+        s = max(0.0, float(it["start"]) - pad)
+        e = min(total, float(it["end"]) + pad)
+        if out and s < out[-1]["end"]:
+            if it.get("label", "") == out[-1].get("label", ""):  # same section: merge
+                out[-1]["end"] = max(out[-1]["end"], e)
+                continue
+            s = out[-1]["end"]  # different section: start where the previous one ends
+        if e - s < min_len:
+            continue
+        out.append({**it, "start": round(s, 2), "end": round(e, 2)})
+    return out
+
+
+def main():
+    args = sys.argv[1:]
+    job = args[0]
+    opt = lambda k: args[args.index(k) + 1] if k in args and args.index(k) + 1 < len(args) else ""
+    wd = job_dir(job)
+    total = duration(wd / "tight.mp4")
+    segs = parse_srt((wd / "transcript.srt").read_text())
+    ev = json.loads((wd / "event.json").read_text()) if (wd / "event.json").exists() else {}
+    title = opt("--title") or ev.get("title", "")
+    subtitle = opt("--subtitle") or ev.get("subtitle", "")
+    lo, hi = float(env("CLIP_MIN", 25)), float(env("CLIP_MAX", 60))
+    n_clips = int(env("EVENT_CLIP_COUNT", 5))
+    target = (f"Target length of the full edit: about {ev['target_minutes']} minutes; keep the most important parts."
+              if ev.get("target_minutes") else "Keep all substantive content; only remove dead time.")
+
+    plan = None
+    if env("PICKER", "claude-code") != "none":
+        prompt = PROMPT.format(title=title or "(not given)", subtitle=subtitle or "(not given)",
+                               speakers=", ".join(ev.get("speakers", [])) or "(not given)",
+                               notes=ev.get("notes", "(none)"), total=total, target=target,
+                               clips=n_clips, lo=int(lo), hi=int(hi),
+                               transcript=transcript_with_gaps(segs, total))
+        try:
+            raw = ask(prompt)
+            (wd / "plan_raw.txt").write_text(raw)
+            plan = extract_json(raw, "object")
+            log(job, f"plan: model returned {len(plan.get('segments', []))} segments")
+        except Exception as e:
+            log(job, f"plan: WARNING model failed ({type(e).__name__}: {e}); keeping the whole event")
+    if plan is None:  # fallback: trim the dead time before the first and after the last words
+        first = max(0.0, segs[0]["start"] - 2) if segs else 0.0
+        last = min(total, segs[-1]["end"] + 2) if segs else total
+        plan = {"segments": [{"start": first, "end": last, "label": "Full event", "speaker": "", "role": ""}],
+                "highlights": [], "social_clips": [], "youtube": {"title": title, "description": ""}}
+
+    # organiser's must_keep ranges always survive
+    for a, b in ev.get("must_keep", []):
+        plan["segments"].append({"start": to_sec(a), "end": to_sec(b), "label": "Performance",
+                                 "speaker": "", "role": ""})
+
+    plan["title"], plan["subtitle"] = title, subtitle
+    plan["segments"] = clean_ranges(plan["segments"], total, 3.0)
+    plan["highlights"] = [h for h in clean_ranges(plan.get("highlights", []), total, 3.0, pad=0.2)
+                          if h["end"] - h["start"] <= 25]
+    clips = snap(plan.get("social_clips", []), segs, total, lo, hi)[:n_clips] if segs else []
+    plan["social_clips"] = clips
+
+    (wd / "plan.json").write_text(json.dumps(plan, indent=2))
+    (wd / "clips.json").write_text(json.dumps(clips, indent=2))
+    kept = sum(s["end"] - s["start"] for s in plan["segments"])
+    log(job, f"plan: keeping {len(plan['segments'])} segments, {kept / 60:.1f} of {total / 60:.1f} min; "
+             f"{len(plan['highlights'])} highlights; {len(clips)} social clips")
+
+
+if __name__ == "__main__":
+    main()

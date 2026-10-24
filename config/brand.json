@@ -1,0 +1,50 @@
+{
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "caption": {
+    "font": "DejaVu Sans",
+    "font_size": 14,
+    "bold": true,
+    "primary_color": "#FFFFFF",
+    "outline_color": "#000000",
+    "outline": 2,
+    "shadow": 0,
+    "margin_v": 70,
+    "max_chars_per_line": 28
+  },
+  "hook": {
+    "enabled": true,
+    "seconds": 3,
+    "font_size": 68,
+    "color": "#FFFFFF",
+    "box_color": "#000000",
+    "box_opacity": 0.6,
+    "y": 0.16,
+    "max_chars_per_line": 18
+  },
+  "video": {
+    "crf": 20,
+    "preset": "faster",
+    "audio_bitrate": "160k",
+    "loudnorm": true
+  },
+  "event": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "font": "DejaVu Sans",
+    "title_bg": "#14213D",
+    "accent": "#D9702B",
+    "text_color": "#FFFFFF",
+    "title_seconds": 4,
+    "end_text": "Thank you for watching",
+    "end_seconds": 3,
+    "lower_third_seconds": 5,
+    "fade_seconds": 0.3,
+    "loudness_lufs": -14,
+    "crf": 20,
+    "preset": "faster",
+    "audio_bitrate": "192k"
+  }
+}

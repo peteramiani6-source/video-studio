@@ -1,0 +1,12 @@
+.env
+.venv/
+inbox/*
+!inbox/.gitkeep
+work/
+out/
+archive/
+logs/
+remotion/node_modules/
+remotion/out/
+__pycache__/
+*.lock

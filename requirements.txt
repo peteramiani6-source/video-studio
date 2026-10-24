@@ -1,0 +1,4 @@
+faster-whisper>=1.1
+anthropic>=0.40
+google-genai>=1.0
+requests>=2.31
