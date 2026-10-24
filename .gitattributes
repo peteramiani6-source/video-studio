@@ -3,3 +3,6 @@
 *.png binary
 *.mp3 binary
 *.mp4 binary
+*.ttf binary
+*.gz binary
+*.jpg binary

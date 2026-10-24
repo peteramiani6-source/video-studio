@@ -1,25 +1,54 @@
 # remotion/
 
-Use this folder for videos generated from code, such as Mealsvo demos, animated explainers and promo clips. It's separate from the clipping pipeline.
+Animation templates written in React and rendered to MP4 by [Remotion](https://www.remotion.dev). Right now there is one template, **ScriptureEpisode**, used by scripture mode. Add new templates here (promos, intros, animated lower-thirds) the same way.
 
-## Set up once
+```
+remotion/
+├── src/
+│   ├── index.ts              entry point (registers the compositions)
+│   ├── Root.tsx              the composition list + sample props for the preview
+│   └── scripture/
+│       ├── Episode.tsx       puts the scenes in sequence, plus progress bar, draft stamp and audio
+│       ├── Scenes.tsx        hook, verse (word-by-word), reflection, live-it points, end card
+│       ├── Background.tsx    slowly moving gradient, drifting lights, vignette
+│       ├── fonts.ts          loads the bundled fonts before the first frame
+│       └── types.ts          the props scripts/scripture.py passes in
+├── public/
+│   ├── fonts/                Cormorant Garamond + Inter (SIL Open Font License, licence files included)
+│   └── jobs/                 temporary audio for the render in progress (not in git)
+├── package.json              versions pinned (Remotion 4.0.533)
+└── remotion.config.ts        codec and quality
+```
+
+## Setup
+
+`setup.sh` runs this for you. To do it by hand:
 
 ```bash
 cd remotion
-npx create-video@latest .        # pick the blank or "Hello World" template
-npx skills add remotion          # official skill so Claude Code writes correct Remotion code
-npm run dev                      # preview in the browser
+npm ci
 ```
 
-## Use it
+The first render downloads a headless Chrome. On a machine that already has one, point Remotion at it with `REMOTION_BROWSER=/path/to/chrome`.
 
-Ask Claude Code from the repo root, for example: *"In remotion/, make a 20-second 1080x1920 Mealsvo promo:
-logo intro, three feature cards, end screen with mealsvo.com."*
-
-Render:
+## Preview and edit the design
 
 ```bash
-npx remotion render <CompositionId> ../out/remotion/<name>.mp4
+cd remotion
+npm run studio        # opens Remotion Studio in the browser with the sample episode
 ```
 
-You can also feed rendered clips from `out/` into a Remotion composition to add intros, outros or lower-thirds.
+Change `src/scripture/Scenes.tsx` and the preview updates live. Brand colours and the series name come from `config/brand.json` → `scripture`, not from the code.
+
+## How a render works
+
+`scripts/scripture.py render <id>`:
+1. reads the episode file and re-checks the verse against the bundled KJV
+2. works out each scene's length from reading speed, or stretches the scenes to fit the voiceover
+3. writes the props to `work/scripture-<id>/props_<format>.json` and copies the audio into `public/jobs/<id>/`
+4. runs `npx remotion render src/index.ts ScriptureEpisode … --props=…`
+5. normalises the loudness with FFmpeg and writes `out/scripture/<id>/`
+
+## Licensing
+
+Remotion is free for individuals and small companies; larger companies need a company licence. Check [remotion.dev/license](https://www.remotion.dev/license) if the channel becomes a business. The fonts are under the SIL Open Font License, which allows commercial use.

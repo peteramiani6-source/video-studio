@@ -6,7 +6,7 @@
 #   scripts/event.sh --resume <job-id>      # continue a failed job: finished steps are skipped
 #
 # Put an optional event.json in the folder (or next to the file with the same name) for speakers,
-# notes, must_keep ranges and target length. See event.example.json.
+# notes, must_keep ranges and target length. See config/event.example.json.
 # To re-plan a job from scratch, delete work/<job>/plan.json and resume.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -20,6 +20,7 @@ from render import hook_filters, keep_ranges, remap  # noqa: E402
 from plan_shots import heuristic_edit, quality_warnings, validate_edit  # noqa: E402
 from render_shots import frame_filter  # noqa: E402
 from shots import cut_times, mean_in, parse_metadata, split_shots  # noqa: E402
+import scripture  # noqa: E402
 
 
 class ExtractJson(unittest.TestCase):
@@ -284,6 +285,64 @@ class Montage(unittest.TestCase):
         self.assertIn("x='(iw-ow)*0.25'", frame_filter("vertical", 1080, 1920, 0.25))
         self.assertIn("x='(iw-ow)*1'", frame_filter("vertical", 1080, 1920, 3))
         self.assertTrue(frame_filter("wide", 1920, 1080, 0.5).startswith("scale=1920:1080"))
+
+
+class Scripture(unittest.TestCase):
+    def test_references(self):
+        self.assertEqual(scripture.parse_ref("Proverbs 3:5-6"), ("Proverbs", 3, 5, 6))
+        self.assertEqual(scripture.parse_ref("prov 3:5"), ("Proverbs", 3, 5, 5))
+        self.assertEqual(scripture.parse_ref("1 Cor 13:4–7"), ("1 Corinthians", 13, 4, 7))
+        self.assertEqual(scripture.parse_ref("I John 4:8")[0], "1 John")
+        self.assertEqual(scripture.parse_ref("first peter 5:7")[0], "1 Peter")
+        self.assertEqual(scripture.parse_ref("Psalm 23"), ("Psalms", 23, 1, 6))
+        self.assertEqual(scripture.parse_ref("Song of Songs 2:4")[0], "Song of Solomon")
+
+    def test_bad_references(self):
+        for bad in ("Hezekiah 1:1", "Proverbs 99:1", "John 3:99", "J 1:1", "3:16", ""):
+            with self.assertRaises(ValueError):
+                scripture.parse_ref(bad)
+        with self.assertRaises(ValueError):
+            scripture.verse_text("Psalms 119")  # 176 verses: too long for one episode
+
+    def test_exact_kjv_text(self):
+        ref, text = scripture.verse_text("John 3:16")
+        self.assertEqual(ref, "John 3:16")
+        self.assertTrue(text.startswith("For God so loved the world, that he gave his only begotten Son"))
+        ref, text = scripture.verse_text("Proverbs 3:5-6")
+        self.assertEqual(ref, "Proverbs 3:5\u20136")
+        self.assertIn("understanding. In all thy ways", text)
+        self.assertEqual(sum(len(c) for ch in scripture.kjv().values() for c in ch), 31102)
+
+    EP = {"id": "t1", "reference": "Galatians 6:9", "hook": "When doing right feels pointless",
+          "reflection": "Keep going.", "apply": ["Keep one habit", "Help someone"], "closing": "What will you keep?"}
+
+    def test_episode_validation_and_verse_guard(self):
+        ep = dict(self.EP)
+        self.assertEqual(scripture.validate_episode(ep, fix_verse=True), [])
+        self.assertEqual(ep["reference_display"], "Galatians 6:9")
+        ep["verse"] = ep["verse"].replace("weary", "tired")  # someone "fixes" the verse by hand
+        self.assertTrue(any("does not match the KJV" in p for p in scripture.validate_episode(ep)))
+        bad = dict(self.EP, hook="x" * 80, apply=["a"] * 4, format="square")
+        problems = " ".join(scripture.validate_episode(bad, fix_verse=True))
+        self.assertIn("hook", problems)
+        self.assertIn("apply", problems)
+        self.assertIn("format", problems)
+
+    def test_scene_timing(self):
+        ep = dict(self.EP)
+        scripture.validate_episode(ep, fix_verse=True)
+        s = scripture.settings()
+        scenes = scripture.plan_scenes(ep, s)
+        self.assertEqual([x["type"] for x in scenes], ["hook", "verse", "reflection", "apply", "end"])
+        self.assertTrue(all(x["frames"] >= 15 for x in scenes))
+        with_vo = scripture.plan_scenes(ep, s, vo_seconds=40.0)
+        self.assertAlmostEqual(sum(x["frames"] for x in with_vo) / scripture.FPS, 40.6, delta=0.2)
+
+    def test_next_id(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(scripture, "EPISODES", Path(d)):
+            self.assertEqual(scripture.next_id(), "ep001")
+            (Path(d) / "ep007.json").write_text("{}")
+            self.assertEqual(scripture.next_id(), "ep008")
 
 
 class LlmSubscriptionEnv(unittest.TestCase):

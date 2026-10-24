@@ -1,11 +1,11 @@
 ---
 name: video-edit
-description: Edit videos in this repo. Use it for full edited event videos (title card, trimmed talks, lower-thirds, highlights, YouTube chapters), shot-based montages where the picture matters (behind the scenes, promos, recaps), and captioned 9:16 clips for Reels, Shorts and TikTok. Use it whenever you're asked to edit, cut, clip, caption or reframe a recording, or when a new file lands in inbox/.
+description: Edit and make videos in this repo. Use it for full edited event videos (title card, trimmed talks, lower-thirds, highlights, YouTube chapters), shot-based montages where the picture matters (behind the scenes, promos, recaps), captioned 9:16 clips for Reels, Shorts and TikTok, and animated scripture episodes (verse, reflection, how to live it). Use it whenever you're asked to edit, cut, clip, caption or reframe a recording, or when a new file lands in inbox/.
 ---
 
 # video-edit
 
-There are two modes. Run both from the repo root.
+There are four modes. Run everything from the repo root. Each folder has a README with details.
 
 ## A. Event mode: one finished video from a long recording
 
@@ -15,7 +15,7 @@ scripts/event.sh <video-or-folder> "Event title" "Subtitle (date, venue)"
 
 **Input:** a single file, or a folder of clips. A folder's clips are joined in filename order, and mixed phone and camera footage is normalised to 1920x1080.
 
-**Optional event.json:** put one in the folder, or next to the file with the same name. Copy `event.example.json` to start. It can hold:
+**Optional event.json:** put one in the folder, or next to the file with the same name. Copy `config/event.example.json` to start. It can hold:
 - `speakers`: the correct spellings for lower-thirds
 - `notes`: for example "keep the choir number"
 - `must_keep`: time ranges that are never cut
@@ -81,6 +81,28 @@ To change the cut, look at the contact sheets with the Read tool, edit `edit.jso
 
 `plan_shots` warns when a chosen piece measured much blurrier or shakier than the rest. Check those first. Length, shot limits, gear time and format live under `montage` in `config/brand.json`; colour and stabilization under `look`.
 
+## D. Scripture mode: animated verse episodes
+
+```bash
+scripts/scripture.sh new "Proverbs 3:5-6" --theme "decisions after school"   # drafts scripture/episodes/epNNN.json
+scripts/scripture.sh show <id>                                                # the script, readable
+scripts/scripture.sh check [<id>]                                             # validate (verse matches KJV, lengths, files)
+scripts/scripture.sh render <id> [--draft] [--format vertical|wide|both]
+scripts/scripture.sh render --all [--draft] [--force]
+```
+
+**The verse is sacred text: never write, paraphrase or "fix" it.** `verse` and `reference_display` come from `scripture/data/kjv.json.gz`. If they look wrong, run `check <id> --fix`; don't edit them.
+
+**Never set `"reviewed": true` yourself.** Only the user does, after reading the script. Before that, render with `--draft` only (it stamps DRAFT on the video).
+
+Requests you can handle by editing the episode, then re-rendering:
+- **"Make the hook punchier":** rewrite `hook` (≤ 70 characters), then show the script. Changing the words means the user has to review it again, so set `reviewed` back to false and say so.
+- **"Use my voiceover":** set `"voiceover": "audio/<id>.mp3"`. The scenes stretch to fit it.
+- **"Add music":** set `"music": "music/<file>.mp3"`. Only use files the user put there.
+- **"Wide version for YouTube":** `--format wide` or `both`.
+
+To change colours, series name or handle, edit `config/brand.json` → `scripture`. To change the animation or layout, edit `remotion/src/scripture/Scenes.tsx` (preview with `cd remotion && npm run studio`). Keep the vertical safe area: text must stay clear of the bottom fifth of the frame.
+
 ## Resuming and checking
 
 - **A failed event:** fix the cause, then run `scripts/event.sh --resume <job-id>`. Merge, transcription and (on resume) the plan are skipped when their output exists. To re-plan, delete `work/<job>/plan.json` first.
@@ -99,7 +121,7 @@ Map feedback to settings:
 - **"Windy":** keep `wind_filter` on, and say that a lapel mic is the real fix.
 - **"Text too long, too small or hard to read":** change `hook.seconds`, `font_size` or `shadow`.
 
-Focus, glare and a cluttered frame are shooting problems. Point the user to `SHOOTING.md` rather than promising an edit fix.
+Focus, glare and a cluttered frame are shooting problems. Point the user to `docs/SHOOTING.md` rather than promising an edit fix.
 
 ## Models (`config/models.env`)
 

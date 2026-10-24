@@ -70,5 +70,22 @@
     "crf": 20,
     "preset": "faster",
     "audio_bitrate": "192k"
+  },
+  "scripture": {
+    "series": "One Verse, Real Life",
+    "handle": "",
+    "audience": "young adults, mostly in Kenya and East Africa",
+    "tone": "warm, honest and practical; plain modern English; no preaching or guilt",
+    "faith_context": "Christian",
+    "format": "vertical",
+    "words_per_second": 2.6,
+    "background": [
+      "#0F1B2D",
+      "#2B3A55"
+    ],
+    "accent": "#E8B04B",
+    "text": "#FFFFFF",
+    "music_volume": 0.18,
+    "music_volume_no_voice": 0.45
   }
 }
