@@ -1,0 +1,85 @@
+{
+  "id": "ep004",
+  "reference": "Philippians 4:6-7",
+  "reference_display": "Philippians 4:6–7",
+  "verse": "Be careful for nothing; but in every thing by prayer and supplication with thanksgiving let your requests be made known unto God. And the peace of God, which passeth all understanding, shall keep your hearts and minds through Christ Jesus.",
+  "hook": "When your mind won't stop racing at night",
+  "skit": [
+    {
+      "shot": "wide",
+      "bg": "#1D2540",
+      "pose": "lying",
+      "face": "wide",
+      "caption": "2:47 AM",
+      "talk": false,
+      "thoughts": [],
+      "seconds": 2.0
+    },
+    {
+      "shot": "closeup",
+      "bg": "#FFFFFF",
+      "pose": "talk",
+      "face": "worried",
+      "caption": "What if I fail the exam...",
+      "talk": true,
+      "thoughts": [],
+      "seconds": 2.4
+    },
+    {
+      "shot": "closeup",
+      "bg": "#FFFFFF",
+      "pose": "think",
+      "face": "worried",
+      "caption": "...and rent is due Friday...",
+      "talk": true,
+      "thoughts": [],
+      "seconds": 2.2
+    },
+    {
+      "shot": "wide",
+      "bg": "flash",
+      "pose": "panic",
+      "face": "wide",
+      "caption": "AND MY WHOLE FUTURE?!",
+      "talk": false,
+      "thoughts": [
+        "exam",
+        "rent",
+        "fees",
+        "job",
+        "what if",
+        "future"
+      ],
+      "seconds": 2.6
+    },
+    {
+      "shot": "wide",
+      "bg": "#FFFFFF",
+      "pose": "idle",
+      "face": "deadpan",
+      "caption": "...okay. Wait.",
+      "talk": false,
+      "thoughts": [],
+      "seconds": 1.8
+    }
+  ],
+  "reflection": "Paul doesn't pretend worries aren't real. He tells us where to take them, and promises a peace that guards us before anything is solved.",
+  "apply": [
+    "Name one worry to God out loud tonight",
+    "Thank Him for one thing first",
+    "Write it down, then leave it there"
+  ],
+  "closing": "What's one worry you'll hand over this week?",
+  "caption": "For every 2:47 AM mind. You're not the only one.",
+  "hashtags": [
+    "#OneVerseRealLife",
+    "#Philippians",
+    "#Overthinking",
+    "#Prayer"
+  ],
+  "format": "vertical",
+  "voiceover": "",
+  "music": "",
+  "theme": "overthinking at night (skit)",
+  "reviewed": false
+}

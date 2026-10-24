@@ -1,5 +1,6 @@
 import React from 'react';
 import {CalculateMetadataFunction, Composition} from 'remotion';
+import {CharacterSheet} from './character/CharacterSheet';
 import {ScriptureEpisode} from './scripture/Episode';
 import {EpisodeProps} from './scripture/types';
 
@@ -30,6 +31,9 @@ const sample: EpisodeProps = {
   voiceover: '',
   music: '',
   musicVolume: 0.45,
+  skit: [],
+  character: {skin: '#A86B45', hoodie: '#E8B04B', line: '#1B1B1B', pants: '#2B3A55'},
+  flash: ['#2B3A55', '#E76F51', '#8AB6A8', '#E8B04B'],
 };
 
 const metadata: CalculateMetadataFunction<EpisodeProps> = ({props}) => ({
@@ -40,6 +44,7 @@ const metadata: CalculateMetadataFunction<EpisodeProps> = ({props}) => ({
 });
 
 export const Root: React.FC = () => (
+  <>
   <Composition
     id="ScriptureEpisode"
     component={ScriptureEpisode}
@@ -50,4 +55,6 @@ export const Root: React.FC = () => (
     width={1080}
     height={1920}
   />
+  <Composition id="CharacterSheet" component={CharacterSheet} durationInFrames={1} fps={30} width={2280} height={1400} />
+  </>
 );

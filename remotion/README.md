@@ -7,14 +7,19 @@ remotion/
 ├── src/
 │   ├── index.ts              entry point (registers the compositions)
 │   ├── Root.tsx              the composition list + sample props for the preview
+│   ├── character/
+│   │   ├── Character.tsx     the channel's character (SVG): poses, faces, blinking, breathing, talking
+│   │   ├── poses.ts          pose and face definitions (hand positions; arms bend on their own)
+│   │   └── CharacterSheet.tsx  every pose and face on one page, for checking changes
 │   └── scripture/
 │       ├── Episode.tsx       puts the scenes in sequence, plus progress bar, draft stamp and audio
 │       ├── Scenes.tsx        hook, verse (word-by-word), reflection, live-it points, end card
+│       ├── Skit.tsx          skit beats: camera punch-ins, flash backgrounds, comic captions, thought words, bed
 │       ├── Background.tsx    slowly moving gradient, drifting lights, vignette
 │       ├── fonts.ts          loads the bundled fonts before the first frame
 │       └── types.ts          the props scripts/scripture.py passes in
 ├── public/
-│   ├── fonts/                Cormorant Garamond + Inter (SIL Open Font License, licence files included)
+│   ├── fonts/                Cormorant Garamond, Inter, Comic Neue (SIL Open Font License, licence files included)
 │   └── jobs/                 temporary audio for the render in progress (not in git)
 ├── package.json              versions pinned (Remotion 4.0.533)
 └── remotion.config.ts        codec and quality
@@ -39,6 +44,14 @@ npm run studio        # opens Remotion Studio in the browser with the sample epi
 ```
 
 Change `src/scripture/Scenes.tsx` and the preview updates live. Brand colours and the series name come from `config/brand.json` → `scripture`, not from the code.
+
+## The character
+
+An original, simple design: a round face, a hoodie in the brand colour, and one curl of hair. Colours come from `config/brand.json` → `scripture.character`. To add a pose, add an entry to `POSES` in `src/character/poses.ts` (just the hand positions; the arms bend on their own), then add the same name to `POSES` in `scripts/scripture.py`. A unit test fails if the two lists drift apart. Check the result with:
+
+```bash
+npx remotion still src/index.ts CharacterSheet sheet.png
+```
 
 ## How a render works
 

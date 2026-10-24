@@ -78,12 +78,12 @@ jobs:
         working-directory: remotion
       - name: Scripture episodes are valid (verse text matches the KJV)
         run: python scripts/scripture.py check
-      - name: Render a draft scripture episode
+      - name: Render a draft scripture episode (with a skit)
         run: |
-          python scripts/scripture.py render ep003 --draft
+          python scripts/scripture.py render ep004 --draft
           python - <<'PY'
           import json, subprocess, sys
-          out = "out/scripture/ep003/ep003_vertical_draft.mp4"
+          out = "out/scripture/ep004/ep004_vertical_draft.mp4"
           info = json.loads(subprocess.run(["ffprobe", "-v", "error", "-print_format", "json", "-show_format",
                                             "-show_streams", out], capture_output=True, text=True, check=True).stdout)
           v = next(s for s in info["streams"] if s["codec_type"] == "video")

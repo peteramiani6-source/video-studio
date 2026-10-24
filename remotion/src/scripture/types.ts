@@ -1,9 +1,22 @@
 // Props for one scripture episode. scripts/scripture.py builds these from scripture/episodes/<id>.json;
 // the verse text always comes from the bundled KJV, never from a model.
 
-export type SceneType = 'hook' | 'verse' | 'reflection' | 'apply' | 'end';
+import {CharacterColors} from '../character/Character';
 
-export type Scene = {type: SceneType; frames: number};
+export type SceneType = 'skit' | 'hook' | 'verse' | 'reflection' | 'apply' | 'end';
+
+export type Scene = {type: SceneType; frames: number; index?: number}; // index: which skit beat
+
+// One skit beat (see remotion/src/character/poses.ts for pose and face names)
+export type Beat = {
+  shot: 'wide' | 'closeup';
+  bg: string; // a colour like "#FFFFFF", or "flash" to cycle the flash palette
+  pose: string;
+  face: string;
+  caption: string;
+  talk: boolean; // mouth moves
+  thoughts: string[]; // words popping up around the head
+};
 
 export type Brand = {
   series: string; // shown on the end card
@@ -30,4 +43,7 @@ export type EpisodeProps = {
   voiceover: string; // path under public/, or ""
   music: string; // path under public/, or ""
   musicVolume: number;
+  skit: Beat[]; // optional comic opening; empty = start with the hook
+  character: CharacterColors;
+  flash: string[]; // background colours for "flash" beats
 };

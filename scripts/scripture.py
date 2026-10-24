@@ -1,7 +1,7 @@
 """Scripture mode: animated verse videos with a short reflection and ways to live it.
 
 Usage:
-  python3 scripts/scripture.py new "Proverbs 3:5-6" [--theme "decisions after school"] [--id ep001]
+  python3 scripts/scripture.py new "Proverbs 3:5-6" [--theme "decisions after school"] [--id ep001] [--skit]
   python3 scripts/scripture.py show <id>
   python3 scripts/scripture.py check [<id> ...]
   python3 scripts/scripture.py render <id> [--draft] [--format vertical|wide|both]
@@ -128,10 +128,65 @@ def settings():
             "tone": "warm, honest and practical; plain modern English; no preaching or guilt",
             "faith_context": "Christian", "words_per_second": 2.6, "format": "vertical",
             "background": ["#0F1B2D", "#2B3A55"], "accent": "#E8B04B", "text": "#FFFFFF",
-            "music_volume": 0.18, "music_volume_no_voice": 0.45, **brand().get("scripture", {})}
+            "music_volume": 0.18, "music_volume_no_voice": 0.45,
+            "character": {"skin": "#A86B45", "hoodie": "#E8B04B", "line": "#1B1B1B", "pants": "#2B3A55"},
+            "flash": ["#2B3A55", "#E76F51", "#8AB6A8", "#E8B04B"], **brand().get("scripture", {})}
 
 
 LIMITS = {"hook": 70, "reflection": 420, "apply_item": 90, "closing": 90}
+
+# Must match remotion/src/character/poses.ts (a unit test checks they stay in sync)
+POSES = ("idle", "talk", "shrug", "think", "facepalm", "panic", "pray", "laugh", "wave", "lying")
+FACES = ("neutral", "deadpan", "wide", "worried", "happy", "peace", "laugh")
+SKIT = {"caption": 60, "thought": 18, "thoughts": 6, "min_s": 0.6, "max_s": 6.0, "total_s": 20.0, "beats": 8}
+HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def validate_skit(skit):
+    """Problems with a skit (list of beats). Empty list = fine. An absent/empty skit is fine too."""
+    if not skit:
+        return []
+    if not isinstance(skit, list):
+        return ['"skit" must be a list of beats']
+    probs = []
+    if len(skit) > SKIT["beats"]:
+        probs.append(f"skit has {len(skit)} beats; keep it to {SKIT['beats']} or fewer")
+    total = 0.0
+    for i, b in enumerate(skit, 1):
+        if not isinstance(b, dict):
+            probs.append(f"skit beat {i} is not an object")
+            continue
+        if b.get("shot", "wide") not in ("wide", "closeup"):
+            probs.append(f'skit beat {i}: shot must be "wide" or "closeup"')
+        if b.get("pose", "idle") not in POSES:
+            probs.append(f"skit beat {i}: unknown pose {b.get('pose')!r} (use {', '.join(POSES)})")
+        if b.get("face", "neutral") not in FACES:
+            probs.append(f"skit beat {i}: unknown face {b.get('face')!r} (use {', '.join(FACES)})")
+        bg = b.get("bg", "#FFFFFF")
+        if bg != "flash" and not HEX.match(str(bg)):
+            probs.append(f'skit beat {i}: bg must be a colour like "#FFFFFF" or "flash"')
+        if len(str(b.get("caption", ""))) > SKIT["caption"]:
+            probs.append(f"skit beat {i}: caption is over {SKIT['caption']} characters")
+        th = b.get("thoughts") or []
+        if not isinstance(th, list) or len(th) > SKIT["thoughts"] or any(len(str(t)) > SKIT["thought"] for t in th):
+            probs.append(f"skit beat {i}: thoughts must be up to {SKIT['thoughts']} short words")
+        try:
+            sec = float(b.get("seconds", 2))
+            if not SKIT["min_s"] <= sec <= SKIT["max_s"]:
+                probs.append(f"skit beat {i}: seconds must be {SKIT['min_s']}-{SKIT['max_s']}")
+            total += sec
+        except (TypeError, ValueError):
+            probs.append(f"skit beat {i}: seconds must be a number")
+    if total > SKIT["total_s"]:
+        probs.append(f"skit is {total:.1f}s; keep it under {SKIT['total_s']:.0f}s so the verse stays the point")
+    return probs
+
+
+def normalize_skit(skit):
+    return [{"shot": b.get("shot", "wide"), "bg": b.get("bg", "#FFFFFF"), "pose": b.get("pose", "idle"),
+             "face": b.get("face", "neutral"), "caption": str(b.get("caption", "")), "talk": bool(b.get("talk", False)),
+             "thoughts": [str(t) for t in (b.get("thoughts") or [])], "seconds": float(b.get("seconds", 2))}
+            for b in (skit or [])]
 
 
 def validate_episode(ep, fix_verse=False):
@@ -162,6 +217,7 @@ def validate_episode(ep, fix_verse=False):
         problems.append(f"closing is over {LIMITS['closing']} characters")
     if ep.get("format", "vertical") not in ("vertical", "wide", "both"):
         problems.append('"format" must be vertical, wide or both')
+    problems += validate_skit(ep.get("skit"))
     for key in ("voiceover", "music"):
         if ep.get(key) and not (SCRIPTURE / ep[key]).exists():
             problems.append(f'{key} file scripture/{ep[key]} not found')
@@ -201,8 +257,19 @@ Write the words that go around the verse:
 - "closing": one short question that invites a comment, max {closing} characters.
 - "caption": the social post caption, 1-2 sentences. "hashtags": 3-5.
 
+{skit_rules}
 Return ONLY one JSON object:
-{{"hook": "", "reflection": "", "apply": ["", ""], "closing": "", "caption": "", "hashtags": []}}"""
+{{"hook": "", "reflection": "", "apply": ["", ""], "closing": "", "caption": "", "hashtags": []{skit_field}}}"""
+
+SKIT_RULES = """- "skit": a short comic opening (3-6 beats, under 18 seconds in total) with the channel's cartoon character,
+  acting out the everyday situation the verse speaks to. The humour is about us (overthinking, procrastinating,
+  2 AM worries), never about God, the scriptures or anything sacred, and never mocking anyone.
+  The last beat should be a quiet "wait..." moment that leads into the verse.
+  Each beat: {{"shot": "wide|closeup", "bg": "#FFFFFF" or another calm hex colour, or "flash" for a chaotic moment,
+  "pose": one of {poses}, "face": one of {faces}, "caption": max 60 characters (shown big, comic style),
+  "talk": true if the character is speaking, "thoughts": up to 6 one-word worries popping around the head (or []),
+  "seconds": 0.6-6}}.
+"""
 
 
 def cmd_new(args):
@@ -215,7 +282,9 @@ def cmd_new(args):
                            tone=s["tone"], reference=ref, verse=text,
                            theme=f"Angle for this episode: {args.theme}\n" if args.theme else "",
                            hook=LIMITS["hook"], reflection=LIMITS["reflection"], item=LIMITS["apply_item"],
-                           closing=LIMITS["closing"])
+                           closing=LIMITS["closing"],
+                           skit_rules=SKIT_RULES.format(poses=", ".join(POSES), faces=", ".join(FACES)) if args.skit else "",
+                           skit_field=', "skit": []' if args.skit else "")
 
     def check(o):
         if not isinstance(o, dict):
@@ -224,6 +293,10 @@ def cmd_new(args):
               "reflection": str(o.get("reflection", "")).strip(),
               "apply": [str(a).strip() for a in (o.get("apply") or []) if str(a).strip()][:3],
               "closing": str(o.get("closing", "")).strip()}
+        if args.skit:
+            if not o.get("skit"):
+                raise ValueError('"skit" is missing')
+            ep["skit"] = normalize_skit(o["skit"])
         bad = [p for p in validate_episode(ep, fix_verse=True) if "voiceover" not in p and "music" not in p]
         if bad:
             raise ValueError("; ".join(bad))
@@ -237,9 +310,9 @@ def cmd_new(args):
     ep = ask_json(prompt, "object", check)
     ep.update({"format": s["format"], "voiceover": "", "music": "", "reviewed": False,
                "theme": args.theme or ""})
-    ordered = {k: ep[k] for k in ("id", "reference", "reference_display", "verse", "hook", "reflection", "apply",
-                                  "closing", "caption", "hashtags", "format", "voiceover", "music", "theme",
-                                  "reviewed")}
+    keys = ("id", "reference", "reference_display", "verse", "hook", "skit", "reflection", "apply", "closing",
+            "caption", "hashtags", "format", "voiceover", "music", "theme", "reviewed")
+    ordered = {k: ep[k] for k in keys if k in ep}
     save(ordered)
     print(f"scripture/episodes/{eid}.json written. Read it, fix anything, then set \"reviewed\": true.\n")
     show(ordered)
@@ -249,6 +322,10 @@ def show(ep):
     print(f"[{ep['id']}] {ep.get('reference_display', ep['reference'])}  "
           f"({'reviewed' if ep.get('reviewed') else 'NOT REVIEWED'})\n")
     print(f"HOOK        {ep.get('hook', '')}")
+    for i, b in enumerate(ep.get("skit") or [], 1):
+        extra = f"  thoughts: {', '.join(b.get('thoughts', []))}" if b.get("thoughts") else ""
+        print(f"SKIT {i}      [{b.get('shot', 'wide')}, {b.get('pose')}, {b.get('face')}, {b.get('seconds')}s] "
+              f"{b.get('caption', '')}{extra}")
     print(f"VERSE       \"{ep.get('verse', '')}\"")
     print(f"REFLECTION  {ep.get('reflection', '')}")
     for i, a in enumerate(ep.get("apply", []), 1):
@@ -264,18 +341,32 @@ def words(s):
 
 
 def plan_scenes(ep, s, vo_seconds=None):
-    """Scene list with frame counts. Reading-speed based; with a voiceover, stretched to its length."""
+    """Scene list with frame counts. Reading-speed based; with a voiceover, stretched to its length.
+    With a skit, its beats open the episode in place of the hook."""
     wps = float(s["words_per_second"])
-    secs = [("hook", max(2.2, words(ep["hook"]) / wps + 0.8)),
-            ("verse", max(4.0, words(ep["verse"]) / (wps * 0.85) + 2.0)),   # slower: it's read with care
-            ("reflection", max(3.5, words(ep["reflection"]) / wps + 1.2)),
-            ("apply", sum(max(2.2, words(a) / wps + 0.9) for a in ep["apply"]) + 0.8),
-            ("end", 3.0)]
-    total = sum(t for _, t in secs)
-    if vo_seconds:
-        scale = (vo_seconds + 0.6) / total
-        secs = [(k, t * scale) for k, t in secs]
-    return [{"type": k, "frames": max(15, round(t * FPS))} for k, t in secs]
+    skit = normalize_skit(ep.get("skit"))
+    opening = [("skit", b["seconds"], i) for i, b in enumerate(skit)] or [("hook", max(2.2, words(ep["hook"]) / wps + 0.8), None)]
+    secs = opening + [("verse", max(4.0, words(ep["verse"]) / (wps * 0.85) + 2.0), None),   # slower: read with care
+                      ("reflection", max(3.5, words(ep["reflection"]) / wps + 1.2), None),
+                      ("apply", sum(max(2.2, words(a) / wps + 0.9) for a in ep["apply"]) + 0.8, None),
+                      ("end", 3.5 if skit else 3.0, None)]
+    total = sum(t for _, t, _ in secs)
+    scale = (vo_seconds + 0.6) / total if vo_seconds else 1.0
+    out = []
+    for k, t, i in secs:
+        sc = {"type": k, "frames": max(15, round(t * scale * FPS))}
+        if i is not None:
+            sc["index"] = i
+        out.append(sc)
+    return out
+
+
+def episode_seconds(ep, s=None):
+    """Planned length without a voiceover (with one, the video follows the voiceover)."""
+    return sum(sc["frames"] for sc in plan_scenes(ep, s or settings())) / FPS
+
+
+MAX_SHORT = 60.0  # Reels / Shorts / TikTok sweet spot
 
 
 def browser():
@@ -298,7 +389,7 @@ def build_props(ep, s, fmt, draft):
             shutil.copy(src, pub / f"{key}{src.suffix}")
             rel[key] = f"jobs/{ep['id']}/{key}{src.suffix}"
     w, h = (1080, 1920) if fmt == "vertical" else (1920, 1080)
-    apply_frames = scenes[3]["frames"]
+    apply_frames = next(sc["frames"] for sc in scenes if sc["type"] == "apply")
     weights = [max(2.2, words(a) / float(s["words_per_second"]) + 0.9) for a in ep["apply"]]
     return {
         "width": w, "height": h, "fps": FPS, "draft": bool(draft),
@@ -311,6 +402,8 @@ def build_props(ep, s, fmt, draft):
         "scenes": scenes,
         "voiceover": rel.get("voiceover", ""), "music": rel.get("music", ""),
         "musicVolume": float(s["music_volume"] if rel.get("voiceover") else s["music_volume_no_voice"]),
+        "skit": [{k: v for k, v in b.items() if k != "seconds"} for b in normalize_skit(ep.get("skit"))],
+        "character": s["character"], "flash": s["flash"],
     }
 
 
@@ -344,6 +437,9 @@ def render_one(ep, fmt, draft):
     shutil.rmtree(REMOTION / "public" / "jobs" / ep["id"], ignore_errors=True)
     secs = sum(sc["frames"] for sc in props["scenes"]) / FPS
     log(f"scripture-{ep['id']}", f"render: {final.relative_to(ROOT)} ({secs:.1f}s, {fmt}{', draft' if draft else ''})")
+    if secs > MAX_SHORT:
+        log(f"scripture-{ep['id']}", f"render: WARNING {secs:.0f}s is over {MAX_SHORT:.0f}s for Reels/Shorts; "
+                                     "shorten the reflection, an apply point or the skit")
     (od / "post.md").write_text(
         f"# {ep['id']}: {props['reference']}\n\n{ep.get('caption', '')}\n\n{' '.join(ep.get('hashtags', []))}\n\n"
         f"> \"{ep['verse']}\" ({props['reference']}, KJV)\n")
@@ -390,7 +486,10 @@ def cmd_check(args):
             save(ep)
         problems = validate_episode(ep)
         state = "ok" if not problems else "PROBLEMS"
-        print(f"{eid}: {state}{'' if ep.get('reviewed') else ' (not reviewed)'}")
+        secs = episode_seconds(ep) if not problems else 0
+        print(f"{eid}: {state}{'' if ep.get('reviewed') else ' (not reviewed)'}" + (f", {secs:.0f}s" if secs else ""))
+        if secs > MAX_SHORT and not ep.get("voiceover"):
+            print(f"   ! {secs:.0f}s is over {MAX_SHORT:.0f}s: shorten the reflection, an apply point or the skit")
         for p in problems:
             print(f"   - {p}")
         bad += bool(problems)
@@ -404,6 +503,7 @@ def main():
     n.add_argument("reference")
     n.add_argument("--theme", default="")
     n.add_argument("--id", default="")
+    n.add_argument("--skit", action="store_true", help="also write a comic skit with the character to open the episode")
     sh = sub.add_parser("show", help="print an episode as a readable script")
     sh.add_argument("id")
     c = sub.add_parser("check", help="validate episodes (verse matches KJV, lengths, files)")
