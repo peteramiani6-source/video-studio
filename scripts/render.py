@@ -73,6 +73,15 @@ def hook_filters(hook, name, wd, cfg, H, font):
     return out
 
 
+def caption_style(cap):
+    """libass force_style string for burned captions (config: "caption" in brand.json)."""
+    return ",".join([
+        f"FontName={cap['font']}", f"FontSize={cap['font_size']}", f"Bold={1 if cap.get('bold') else 0}",
+        f"PrimaryColour={ass_color(cap['primary_color'])}", f"OutlineColour={ass_color(cap['outline_color'])}",
+        "BorderStyle=1", f"Outline={cap['outline']}", f"Shadow={cap['shadow']}",
+        "Alignment=2", f"MarginV={cap['margin_v']}"])
+
+
 def segment_cues(segs, start, end):
     return [{"start": max(0, s["start"] - start), "end": min(end, s["end"]) - start, "text": s["text"]}
             for s in segs if s["end"] > start and s["start"] < end]
@@ -116,11 +125,7 @@ def main():
     cap, vid = b["caption"], b["video"]
     W, H = b["width"], b["height"]
 
-    style = ",".join([
-        f"FontName={cap['font']}", f"FontSize={cap['font_size']}", f"Bold={1 if cap.get('bold') else 0}",
-        f"PrimaryColour={ass_color(cap['primary_color'])}", f"OutlineColour={ass_color(cap['outline_color'])}",
-        "BorderStyle=1", f"Outline={cap['outline']}", f"Shadow={cap['shadow']}",
-        "Alignment=2", f"MarginV={cap['margin_v']}"])
+    style = caption_style(cap)
     fps = b["fps"]
     vf = (f"crop=w='min(iw,ih*{W}/{H})':h='min(ih,iw*{H}/{W})',"
           f"scale={W}:{H}:force_original_aspect_ratio=decrease,"

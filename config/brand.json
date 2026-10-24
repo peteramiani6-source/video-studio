@@ -39,6 +39,14 @@
     "wind_filter": true,
     "wind_cutoff_hz": 100
   },
+  "montage": {
+    "format": "vertical",
+    "seconds": 30,
+    "min_shot": 1.5,
+    "max_shot": 8,
+    "gear_max": 3,
+    "scene_threshold": 0.3
+  },
   "video": {
     "crf": 20,
     "preset": "faster",

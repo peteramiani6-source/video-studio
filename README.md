@@ -3,6 +3,7 @@
 Two things it does:
 
 - **Event mode:** turns a long event recording (or a folder of phone and camera clips) into a finished video. You get a title card, the dead time cut out, each talk kept whole, speaker lower-thirds, fades, balanced audio and an end card. You also get a highlight reel, subtitles, YouTube chapters and vertical social clips.
+- **Montage mode:** for short edits judged on the picture (behind the scenes, promos, recaps). The editor looks at a keyframe of every shot, skips blurry and shaky ones, puts the shots in story order (wide → close-ups → a human ending), and slides the vertical crop onto the people.
 - **Clip mode:** drop a talk or podcast into `inbox/` and get captioned 9:16 clips, plus a `captions.md` ready to post.
 
 Claude Code orchestrates through the `video-edit` skill. A model handles judgment calls only (choosing moments and writing copy). FFmpeg does all the cutting and rendering.
@@ -41,6 +42,14 @@ The results go to `out/event-.../`:
 
 To review the edit, open `work/<job>/plan.json`, or run `claude` and just ask (for example "drop the announcements", "Grace's surname is spelled Wanjirũ", "make it under 20 minutes"). It updates the plan and re-renders without re-transcribing. While iterating, `python3 scripts/render_event.py <job> --draft --skip-highlights` renders a fast half-resolution preview (`event_full_draft.mp4`).
 
+### Make a behind-the-scenes or promo montage
+
+```bash
+scripts/montage.sh "inbox/Garden BTS" "behind the scenes of our garden interview"
+```
+
+The result is `out/montage-.../montage.mp4` plus `montage.md` (the hook, caption, hashtags and the cut list with reasons). To see what the editor saw, open the contact sheets in `work/<job>/frames/`. To change the cut, edit `work/<job>/edit.json` (or ask Claude Code, for example "open on the wide shot, less tripod"), then run `python3 scripts/render_shots.py <job>`.
+
 ### Clips on autopilot
 
 ```bash
@@ -66,6 +75,7 @@ Run `claude` in this folder, then ask things like:
 | Orchestration | Scripts; Claude Code fixes failures | `MODE=claude` / `MODE=direct` in the watcher |
 | Transcription | faster-whisper (local) | `STT=groq` |
 | Edit decisions, clip picking, copy | Your Claude subscription via Claude Code | `PICKER=claude` (API), `gemini`, `none` |
+| Shot choice in montages (sees the frames) | Your Claude subscription via Claude Code | same `PICKER` setting |
 | Cut / reframe / captions | FFmpeg | — |
 | Pause removal (inside clips) | FFmpeg, from word timestamps | `SILENCE_CUT=0` |
 
@@ -81,6 +91,10 @@ scripts/merge.py              joins and normalises event clips
 scripts/plan_event.py         the model writes the edit (plan.json)
 scripts/render_event.py       title/end cards, segments, lower-thirds, highlights, SRT, chapters
 scripts/llm.py                one place for model calls (subscription, API or Gemini)
+scripts/montage.sh            montage mode: shot-based edit from what the camera saw
+scripts/shots.py              scene cuts, sharpness, motion, keyframes, contact sheets
+scripts/plan_shots.py         the model looks at the sheets and orders the shots (edit.json)
+scripts/render_shots.py       renders edit.json: crop follows the subject, look, captions, hook
 scripts/run.sh                clip mode: full pipeline for one file
 scripts/prepare.sh            step 1 (stream copy, no re-encode)
 scripts/transcribe.py         step 2
