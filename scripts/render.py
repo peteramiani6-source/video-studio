@@ -146,7 +146,8 @@ def main():
             graph.append("[ac]" + ("loudnorm=I=-14:TP=-1.5:LRA=11" if vid.get("loudnorm") else "anull") + "[a]")
         else:
             graph.append("".join(f"[v{j}]" for j in range(k)) + f"concat=n={k}:v=1:a=0[vc]")
-        graph.append("[vc]" + ",".join([vf, *hook, f"subtitles={srt}:force_style='{style}'"]) + "[v]")
+        subs = [f"subtitles={srt}:force_style='{style}'"] if cues else []  # libass can't open an empty SRT
+        graph.append("[vc]" + ",".join([vf, *hook, *subs]) + "[v]")
 
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
                "-ss", f"{start:.3f}", "-t", f"{end - start:.3f}", "-i", str(src),
